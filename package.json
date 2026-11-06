@@ -8,6 +8,7 @@
   },
   "scripts": {
     "preinstall": "node server/tooling/check-node.mjs",
+    "new-game": "node server/tooling/new-game.mjs",
     "dev": "pnpm --filter @sdm/template dev",
     "build": "pnpm -r build",
     "test": "vitest run",

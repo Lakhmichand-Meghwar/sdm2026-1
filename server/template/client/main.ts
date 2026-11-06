@@ -2,6 +2,7 @@
  * Template game client. Placeholder: checks the server's /health and shows the result.
  * Teams replace this with their own lobby and renderer; the debug overlay comes from @sdm/core/client.
  */
+import { type BuildInfo, createDebugOverlay, createFrameMeter, readClientParams } from "@sdm/core/client";
 import { HealthResponseSchema, Routes } from "@sdm/core/shared";
 import { GAME_ID } from "../shared/index.ts";
 
@@ -20,10 +21,38 @@ async function main(): Promise<void> {
       <div>game: ${GAME_ID}</div>
       <div>env: ${health.env}</div>
       <div>sha: ${health.sha}</div>
-      <div>games: ${health.games.join(", ")}</div>`;
+      <div>games: ${health.games.join(", ")}</div>
+      <div>press ~ for the debug overlay</div>`;
+    startDebugOverlay({ env: health.env, sha: health.sha });
   } catch (err) {
     app.innerHTML = `<div class="bad">Can't reach the server at ${SERVER_URL}</div><div>${String(err)}</div>`;
   }
+}
+
+/** Until the template has a room, the overlay shows build info and frame timing only. */
+function startDebugOverlay(build: BuildInfo): void {
+  const overlay = createDebugOverlay({ build, startOpen: readClientParams(location.search).debug });
+  const meter = createFrameMeter(performance.now());
+  const onFrame = (now: number): void => {
+    const { fps, frameMs } = meter.frame(now);
+    overlay.update(
+      {
+        roomId: null,
+        roomCode: null,
+        playerId: null,
+        tick: null,
+        pingMs: null,
+        patchesPerSecond: null,
+        bytesPerSecond: null,
+        fps,
+        frameMs,
+      },
+      undefined,
+      now,
+    );
+    requestAnimationFrame(onFrame);
+  };
+  requestAnimationFrame(onFrame);
 }
 
 void main();

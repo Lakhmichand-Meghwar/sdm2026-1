@@ -14,3 +14,15 @@ test-results/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# JetBrains IDEs and editor swap files
+.idea/
+*.swp
+
+# OS files
+Thumbs.db
+
+# Tool caches
+.vite/
+*.tsbuildinfo
+.pnpm-store/
