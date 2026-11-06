@@ -9,6 +9,5 @@
     { "duration": 80, "penalty": 5 },
     { "duration": 70, "penalty": 5 }
   ],
-  "resetSeconds": 3,
-  "paintWindowSeconds": 4
+  "resetSeconds": 3
 }

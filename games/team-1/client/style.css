@@ -2498,3 +2498,48 @@ button:disabled {
   z-index: 90;
   white-space: nowrap;
 }
+
+/* ── roles: what is mine, what is my partner's ───────────────────────────── */
+.interactive.not-mine {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.interactive.not-mine:hover {
+  filter: none;
+}
+.interactive.not-mine:active {
+  transform: none;
+}
+.brief-role {
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hud-border);
+  border-radius: 8px;
+}
+.clue-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.clue-share {
+  margin: 0;
+  padding: 1px 8px;
+  font-family: var(--ff);
+  font-size: 0.58rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid rgba(184, 136, 48, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 160ms;
+}
+.clue-share:hover {
+  background: rgba(184, 136, 48, 0.12);
+}
+.clue-tag {
+  font-size: 0.56rem;
+  color: var(--dim);
+}

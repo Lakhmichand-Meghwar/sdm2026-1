@@ -16,15 +16,16 @@ import {
   TimeLoopState,
 } from "./index.ts";
 import {
+  CLUE_DEFS,
   type ClueId,
   CODE_LEVEL,
   CODES,
   type CodeKind,
   LEVEL_COUNT,
   levelInfo,
+  OWNER,
   SHELF_ORDER,
   SWITCH_TARGET_MASK,
-  switchOwner,
   TARGET_LEVEL,
   type Target,
 } from "./rules.ts";
@@ -53,16 +54,28 @@ function say(ctx: Ctx, kind: string, text: string, by = 0, extra = ""): void {
   while (s.events.length > MAX_EVENTS) s.events.shift();
 }
 
-function hasClue(ctx: Ctx, id: ClueId): boolean {
-  for (const clue of ctx.state.clues) if (clue === id) return true;
+function journal(ctx: Ctx, slot: Slot): TimeLoopState["clues1"] {
+  return slot === 1 ? ctx.state.clues1 : ctx.state.clues2;
+}
+
+function hasClue(ctx: Ctx, slot: Slot, id: ClueId): boolean {
+  for (const clue of journal(ctx, slot)) if (clue === id) return true;
   return false;
 }
 
-/** Records a clue the first time it is found. Returns false when the team already had it. */
-function learn(ctx: Ctx, id: ClueId, text: string): boolean {
-  if (hasClue(ctx, id)) return false;
-  ctx.state.clues.push(id);
-  say(ctx, "success", text);
+function otherSlot(slot: Slot): Slot {
+  return slot === 1 ? 2 : 1;
+}
+
+/**
+ * A detective reads something. The details go only to their own journal and screen; everybody
+ * sees that they looked. Returns false when they already had the clue.
+ */
+function learn(ctx: Ctx, slot: Slot, id: ClueId, detail: string, publicText: string): boolean {
+  if (hasClue(ctx, slot, id)) return false;
+  journal(ctx, slot).push(id);
+  say(ctx, "success", detail, slot);
+  say(ctx, "info", publicText);
   return true;
 }
 
@@ -90,8 +103,6 @@ function levelConfig(ctx: Ctx): TimeLoopConfig["levels"][number] {
 function clearRoom(ctx: Ctx): void {
   const s = ctx.state;
   s.paintClicks = 0;
-  s.paintMask = 0;
-  s.paintTick = 0;
   s.keyVisible = false;
   s.keyHolder = 0;
   s.cabinetOpen = false;
@@ -121,7 +132,8 @@ function beginLevel(ctx: Ctx, level: number, previous: string): void {
 
 function newGame(ctx: Ctx): void {
   const s = ctx.state;
-  s.clues.clear();
+  s.clues1.clear();
+  s.clues2.clear();
   s.totalLoops = 0;
   s.finalTime = 0;
   beginLevel(ctx, 1, "");
@@ -182,34 +194,23 @@ function tickClock(ctx: Ctx): void {
 
 // ── actions ───────────────────────────────────────────────────────────────────
 
-function pushPainting(ctx: Ctx, slot: Slot, name: string): void {
+function pushPainting(ctx: Ctx, name: string): void {
   const s = ctx.state;
   if (s.keyVisible) {
     say(ctx, "info", "The painting is open. The key is below it.");
     return;
   }
-  const bit = bitOf(slot);
-  const windowTicks = Math.ceil(ctx.config.paintWindowSeconds * ctx.config.tickRate);
-  if (s.paintMask !== 0 && ctx.tick - s.paintTick > windowTicks) s.paintMask = 0;
-  if (s.paintMask === 0) s.paintTick = ctx.tick;
-  if ((s.paintMask & bit) !== 0) return;
-  s.paintMask |= bit;
-  if (s.paintMask !== 3) {
-    say(ctx, "info", `${name} pushes the painting. It is heavy: the other detective has to push too.`);
-    return;
-  }
-  s.paintMask = 0;
   s.paintClicks += 1;
   if (s.paintClicks < 4) {
     const msgs = [
-      "The painting shifts slightly.",
-      "The painting swings. Something hides behind it.",
-      "Almost there. One more push together.",
+      `${name} pushes the painting. It shifts slightly.`,
+      `${name} pushes the painting. It swings. Something hides behind it.`,
+      `${name} pushes the painting. Almost there. One more push.`,
     ];
     say(ctx, "info", msgs[s.paintClicks - 1] ?? "The painting moves.");
   } else {
     s.keyVisible = true;
-    say(ctx, "success", "You swing the painting open together. A key drops!");
+    say(ctx, "success", `${name} swings the painting open. A key drops!`);
   }
 }
 
@@ -246,14 +247,10 @@ function pullBook(ctx: Ctx, name: string, book: number): void {
   }
 }
 
-function flipSwitch(ctx: Ctx, slot: Slot, index: number): void {
+function flipSwitch(ctx: Ctx, index: number): void {
   const s = ctx.state;
   if (s.powered) {
     say(ctx, "info", "The power is already on.");
-    return;
-  }
-  if (switchOwner(index) !== slot) {
-    say(ctx, "warn", "That switch is on the other detective's side of the panel.");
     return;
   }
   s.switchMask ^= 1 << index;
@@ -270,17 +267,22 @@ function prompt(ctx: Ctx, slot: Slot, kind: CodeKind, hint: string): void {
 function interact(ctx: Ctx, slot: Slot, target: Target): void {
   const s = ctx.state;
   if (TARGET_LEVEL[target] !== s.level) return;
+  const owner = OWNER[target];
+  if (owner !== 0 && owner !== slot) {
+    say(ctx, "warn", `${nameOf(ctx, owner)} has to do that. Tell them what you see.`, slot);
+    return;
+  }
   const name = nameOf(ctx, slot);
 
   switch (target) {
     // room 1 · the office
     case "note":
-      if (!learn(ctx, "blue4", `${name} reads the note: "Blue — 4"`)) {
-        say(ctx, "info", "Already noted: Blue — 4");
+      if (!learn(ctx, slot, "blue4", 'The note says: "Blue — 4"', `${name} reads the note.`)) {
+        say(ctx, "info", "Already noted: Blue — 4", slot);
       }
       return;
     case "painting":
-      pushPainting(ctx, slot, name);
+      pushPainting(ctx, name);
       return;
     case "key":
     case "key2":
@@ -293,15 +295,19 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
         say(ctx, "warn", "The wardrobe is locked. Find the key first.");
       } else {
         s.cabinetOpen = true;
-        if (!hasClue(ctx, "findyear")) s.clues.push("findyear");
+        for (const slotId of [1, 2] as const) {
+          if (!hasClue(ctx, slotId, "findyear")) journal(ctx, slotId).push("findyear");
+        }
         say(ctx, "success", `${name} unlocks the wardrobe. A photograph is pinned inside.`);
       }
       return;
     case "photo":
       if (!s.cabinetOpen) {
         say(ctx, "warn", "The wardrobe is locked. Can't see anything.");
-      } else if (!learn(ctx, "year1998", `${name}: the photograph shows a year, 1998`)) {
-        say(ctx, "info", "The photograph shows a year: 1998");
+      } else if (
+        !learn(ctx, slot, "year1998", "The photograph shows a year: 1998", `${name} studies the photograph.`)
+      ) {
+        say(ctx, "info", "The photograph shows a year: 1998", slot);
       }
       return;
     case "laptop":
@@ -313,11 +319,9 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
         ctx,
         slot,
         "laptop",
-        hasClue(ctx, "year1998")
+        hasClue(ctx, slot, "year1998")
           ? "You have the year. Enter it now."
-          : hasClue(ctx, "findyear")
-            ? "Find the year on the photograph first."
-            : "Enter the correct 4-digit year to unlock the door.",
+          : "Enter the 4-digit year. The photograph knows it, and your partner can read it.",
       );
       return;
     case "door1":
@@ -327,13 +331,21 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
 
     // room 2 · the archive
     case "card":
-      if (!learn(ctx, "shelforder", `${name} reads the card: blue, red, green, amber`)) {
-        say(ctx, "info", "Already noted: blue, red, green, amber");
+      if (
+        !learn(
+          ctx,
+          slot,
+          "shelforder",
+          "The card lists the books: blue, red, green, amber",
+          `${name} reads the index card.`,
+        )
+      ) {
+        say(ctx, "info", "Already noted: blue, red, green, amber", slot);
       }
       return;
     case "calendar":
-      if (!learn(ctx, "day17", `${name} sees a circled date: the 17th`)) {
-        say(ctx, "info", "Already noted: the 17th");
+      if (!learn(ctx, slot, "day17", "The calendar has the 17th circled", `${name} studies the calendar.`)) {
+        say(ctx, "info", "Already noted: the 17th", slot);
       }
       return;
     case "book0":
@@ -354,8 +366,10 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
       return;
     case "folder":
       if (!s.archiveCabinetOpen) return;
-      if (!learn(ctx, "month04", `${name} opens the folder: filed in month 04`)) {
-        say(ctx, "info", "Already noted: month 04");
+      if (
+        !learn(ctx, slot, "month04", "The folder is filed under month 04", `${name} opens the case folder.`)
+      ) {
+        say(ctx, "info", "Already noted: month 04", slot);
       }
       return;
     case "door2":
@@ -369,29 +383,45 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
           slot,
           "archive",
           slot === 1
-            ? "You enter the month, two digits. The other detective enters the day."
-            : "You enter the day, two digits. The other detective enters the month.",
+            ? "You type the day, two digits. Your partner types the month."
+            : "You type the month, two digits. Your partner types the day.",
         );
       }
       return;
 
     // room 3 · the vault
     case "poster":
-      if (!learn(ctx, "switchpattern", `${name} studies the poster: up, down, up, up`)) {
-        say(ctx, "info", "Already noted: up, down, up, up");
+      if (
+        !learn(
+          ctx,
+          slot,
+          "switchpattern",
+          "The poster shows the switches: up, down, up, up",
+          `${name} studies the poster.`,
+        )
+      ) {
+        say(ctx, "info", "Already noted: up, down, up, up", slot);
       }
       return;
     case "sw0":
     case "sw1":
     case "sw2":
     case "sw3":
-      flipSwitch(ctx, slot, Number(target.slice(2)));
+      flipSwitch(ctx, Number(target.slice(2)));
       return;
     case "terminal":
       if (!s.powered) {
         say(ctx, "warn", "The terminal is dead. Restore the power.");
-      } else if (!learn(ctx, "safecode", `${name}: safe code is the photo year, reversed`)) {
-        say(ctx, "info", "Safe code: the photo year, reversed");
+      } else if (
+        !learn(
+          ctx,
+          slot,
+          "safecode",
+          "The terminal says: safe code is the photo year, reversed",
+          `${name} reads the terminal.`,
+        )
+      ) {
+        say(ctx, "info", "Safe code: the photo year, reversed", slot);
       }
       return;
     case "safe":
@@ -404,7 +434,9 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
           ctx,
           slot,
           "vault",
-          hasClue(ctx, "safecode") ? "The photo year, reversed." : "The terminal may know.",
+          hasClue(ctx, slot, "safecode")
+            ? "The photo year, reversed."
+            : "Ask your partner what the terminal says.",
         );
       }
       return;
@@ -413,6 +445,18 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
       else completeLevel(ctx);
       return;
   }
+}
+
+function shareClue(ctx: Ctx, slot: Slot, id: ClueId): void {
+  if (!hasClue(ctx, slot, id)) return;
+  const partner = otherSlot(slot);
+  if (hasClue(ctx, partner, id)) {
+    say(ctx, "info", `${nameOf(ctx, partner)} already knows that.`, slot);
+    return;
+  }
+  journal(ctx, partner).push(id);
+  say(ctx, "success", `${nameOf(ctx, slot)} tells you: ${CLUE_DEFS[id].text}`, partner);
+  say(ctx, "info", `You told ${nameOf(ctx, partner)}: ${CLUE_DEFS[id].text}`, slot);
 }
 
 function rejectCode(ctx: Ctx, slot: Slot): void {
@@ -467,6 +511,9 @@ function handle(ctx: Ctx, playerId: string, input: TimeLoopInput): void {
   const slot: Slot = player.slot;
 
   switch (input.type) {
+    case "share":
+      if (s.phase === "playing") shareClue(ctx, slot, input.clue);
+      return;
     case "ready":
       if (s.phase !== "briefing") return;
       s.readyMask |= bitOf(slot);

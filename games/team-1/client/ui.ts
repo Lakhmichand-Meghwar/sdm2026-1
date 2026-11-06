@@ -1,5 +1,5 @@
 /** All DOM reads and writes. No game logic here: every setter can be called again with the same value. */
-import { CLUE_DEFS, isClueId, type LevelInfo, SHELF_ORDER } from "../shared/rules.ts";
+import { CLUE_DEFS, isClueId, type LevelInfo, OWNER, SHELF_ORDER, type Target } from "../shared/rules.ts";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -100,6 +100,7 @@ export function setBrief(
   duration: number,
   penalty: number,
   previous: string,
+  role: string,
   iAmReady: boolean,
 ): void {
   setText("brief-prev", previous);
@@ -110,6 +111,7 @@ export function setBrief(
   setText("brief-time", `${duration}s`);
   setText("brief-penalty", `${penalty}s`);
   setText("brief-rule", info.rule);
+  setText("brief-role", role);
   el<HTMLButtonElement>("brief-go").disabled = iAmReady;
   setHidden("brief-wait", !iAmReady);
 }
@@ -178,26 +180,41 @@ export function setBanner(text: string | null): void {
   if (text !== null) setText("partner-banner", text);
 }
 
-export function renderClues(ids: readonly string[], level: number): void {
+export function renderClues(mine: readonly string[], theirs: readonly string[], level: number): void {
   const list = el<HTMLUListElement>("clue-list");
-  const key = `${level}:${ids.join(",")}`;
+  const key = `${level}:${mine.join(",")}|${theirs.join(",")}`;
   if (list.dataset.key === key) return;
   list.dataset.key = key;
-  if (ids.length === 0) {
-    list.innerHTML = `<li class="clue-empty">No clues yet — explore the room.</li>`;
+  if (mine.length === 0) {
+    list.innerHTML = `<li class="clue-empty">Your journal is empty. What you read goes here, and only you see it.</li>`;
     return;
   }
-  list.innerHTML = ids
+  list.innerHTML = mine
     .filter(isClueId)
     .map((id) => {
       const clue = CLUE_DEFS[id];
+      const action = theirs.includes(id)
+        ? `<span class="clue-tag">your partner knows</span>`
+        : `<button type="button" class="clue-share" data-clue="${id}">Tell partner</button>`;
       return `<li class="clue-item${clue.level < level ? " clue-old" : ""}">
-          <span class="clue-text">${clue.text}</span>
+          <span class="clue-head"><span class="clue-text">${clue.text}</span>${action}</span>
           <span class="clue-detail">${clue.detail}</span>
         </li>`;
     })
     .join("");
   list.scrollTop = list.scrollHeight;
+}
+
+/** Dims the things only the other detective can use. */
+export function setOwnership(me: number, taps: Record<string, Target>): void {
+  for (const [id, target] of Object.entries(taps)) {
+    const owner = OWNER[target];
+    const notMine = me !== 0 && owner !== 0 && owner !== me;
+    const node = el(id);
+    node.classList.toggle("not-mine", notMine);
+    if (notMine) node.title = `Player ${owner} handles this`;
+    else node.removeAttribute("title");
+  }
 }
 
 // ── level 1 · the office ──────────────────────────────────────────────────────

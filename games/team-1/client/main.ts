@@ -2,8 +2,9 @@ import { Client, type Room } from "@colyseus/sdk";
 import { buildInviteLink, normalizeRoomCode, readClientParams } from "@sdm/core/client";
 import { JoinByCodeResponseSchema, Routes, ServerMessage } from "@sdm/core/shared";
 import type { TimeLoopInput, TimeLoopState } from "../shared/index.ts";
-import type { Target } from "../shared/rules.ts";
+import { isClueId } from "../shared/rules.ts";
 import "./style.css";
+import { TAPS } from "./targets.ts";
 import * as ui from "./ui.ts";
 import * as view from "./view.ts";
 
@@ -29,7 +30,7 @@ const INTRO = [
   },
   {
     title: "Two detectives",
-    body: "You and a partner play together, each on your own device, in the same room. Talk to each other: some things need both of you.",
+    body: "You and a partner play together, each on your own device, in the same room. Each of you can only touch some of the things in it, so describe what you see and tell each other what you find.",
   },
   {
     title: "What stays",
@@ -42,35 +43,6 @@ const INTRO = [
 ] as const;
 
 let introIndex = 0;
-
-/** Clicking something in the room sends that action to the server; the server decides what happens. */
-const TAPS: Record<string, Target> = {
-  "obj-note": "note",
-  "obj-painting": "painting",
-  "obj-key": "key",
-  "obj-cabinet": "cabinet",
-  "obj-photo": "photo",
-  "obj-laptop": "laptop",
-  "obj-door": "door1",
-  "obj-card": "card",
-  "obj-calendar": "calendar",
-  "obj-book-0": "book0",
-  "obj-book-1": "book1",
-  "obj-book-2": "book2",
-  "obj-book-3": "book3",
-  "obj-key2": "key2",
-  "obj-filing": "filing",
-  "obj-folder": "folder",
-  "obj-door2": "door2",
-  "obj-poster": "poster",
-  "obj-sw-0": "sw0",
-  "obj-sw-1": "sw1",
-  "obj-sw-2": "sw2",
-  "obj-sw-3": "sw3",
-  "obj-terminal": "terminal",
-  "obj-safe": "safe",
-  "obj-door3": "door3",
-};
 
 // ── storage ───────────────────────────────────────────────────────────────────
 
@@ -260,6 +232,11 @@ document.addEventListener("DOMContentLoaded", () => {
   for (const [id, target] of Object.entries(TAPS)) {
     bind(id, () => send({ type: "interact", target }));
   }
+
+  document.getElementById("clue-list")?.addEventListener("click", (e) => {
+    const clue = (e.target as HTMLElement).closest<HTMLElement>(".clue-share")?.dataset.clue;
+    if (clue && isClueId(clue)) send({ type: "share", clue });
+  });
 
   bind("modal-cancel", ui.closeCodeModal);
   bind("modal-close", ui.closeCodeModal);

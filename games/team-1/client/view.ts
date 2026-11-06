@@ -2,7 +2,8 @@
 import { buildInviteLink } from "@sdm/core/client";
 import { timeLoopGame } from "../shared/game.ts";
 import type { GameEvent, TimeLoopState } from "../shared/index.ts";
-import { CODE_DIGITS, type CodeKind, LEVEL_COUNT, levelInfo } from "../shared/rules.ts";
+import { CODE_DIGITS, type CodeKind, LEVEL_COUNT, levelInfo, ROLE_TEXT } from "../shared/rules.ts";
+import { TAPS } from "./targets.ts";
 import * as ui from "./ui.ts";
 
 const config = timeLoopGame.config;
@@ -36,8 +37,10 @@ function isCodeKind(value: string): value is CodeKind {
 }
 
 function showEvent(event: GameEvent, me: number): void {
+  // Private events are for one detective only.
+  if (event.by !== 0 && event.by !== me) return;
   if (event.kind === "prompt") {
-    if (event.by !== me || !isCodeKind(event.extra)) return;
+    if (!isCodeKind(event.extra)) return;
     pendingCode = event.extra;
     ui.openCodeModal({
       ...CODE_TITLES[event.extra],
@@ -45,12 +48,11 @@ function showEvent(event: GameEvent, me: number): void {
       digits: CODE_DIGITS[event.extra],
     });
   } else if (event.kind === "codeok") {
-    if (event.by !== me) return;
     ui.setModalStatus(true, event.text);
     pendingCode = null;
     setTimeout(ui.closeCodeModal, 1000);
   } else if (event.kind === "codebad") {
-    if (event.by === me) ui.setModalStatus(false, event.text);
+    ui.setModalStatus(false, event.text);
   } else {
     ui.toast(event.text, event.kind === "success" ? "success" : event.kind === "warn" ? "warn" : "info");
   }
@@ -98,14 +100,17 @@ function partnerAway(state: TimeLoopState, sessionId: string): boolean {
   return false;
 }
 
-function renderRoom(state: TimeLoopState): void {
+function renderRoom(state: TimeLoopState, me: number): void {
   const level = state.level;
   const duration = config.levels[level - 1]?.duration ?? 60;
   ui.setLevel(levelInfo(level));
   ui.setTimer(state.timeLeft, duration);
   ui.setLoop(state.loop);
   ui.setRoomCode(state.code);
-  ui.renderClues(Array.from(state.clues), level);
+  const mine = Array.from(me === 2 ? state.clues2 : state.clues1);
+  const theirs = Array.from(me === 2 ? state.clues1 : state.clues2);
+  ui.renderClues(mine, theirs, level);
+  ui.setOwnership(me, TAPS);
 
   const keyOnFloor = state.keyVisible && state.keyHolder === 0;
   ui.setPaintCounter(state.paintClicks);
@@ -128,7 +133,7 @@ function renderRoom(state: TimeLoopState): void {
 export function render(state: TimeLoopState, sessionId: string): void {
   const me = state.players.get(sessionId)?.slot ?? 0;
   handleEvents(state, me);
-  renderRoom(state);
+  renderRoom(state, me);
   renderCards(state, sessionId);
 
   const phase = state.phase;
@@ -153,6 +158,7 @@ export function render(state: TimeLoopState, sessionId: string): void {
         config.levels[state.level - 1]?.duration ?? 60,
         penalty,
         state.previous,
+        ROLE_TEXT[state.level]?.[me === 2 ? 2 : 1] ?? "",
         (state.readyMask & bit) !== 0,
       );
       ui.setOverlay("brief");

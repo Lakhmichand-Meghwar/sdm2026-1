@@ -5,7 +5,7 @@
 import { type SchemaType, schema, t } from "@colyseus/schema";
 import { BaseState, RoomSettingsSchema } from "@sdm/core/sim";
 import { z } from "zod";
-import { CODE_KINDS, LEVEL_COUNT, TARGETS } from "./rules.ts";
+import { CLUE_IDS, CODE_KINDS, LEVEL_COUNT, TARGETS } from "./rules.ts";
 
 export const GAME_ID = "time-loop-escape";
 
@@ -28,7 +28,7 @@ export const GameEvent = schema(
     /** info, success, warn, prompt, codeok or codebad */
     kind: t.string().default("info"),
     text: t.string().default(""),
-    /** Slot the event is for, 0 for everyone. */
+    /** Slot the event is for, 0 for everyone. Private events are only shown to that detective. */
     by: t.uint8().default(0),
     /** For `prompt`: the code kind to ask for. */
     extra: t.string().default(""),
@@ -57,15 +57,14 @@ export const TimeLoopState = BaseState.extend(
     previous: t.string().default(""),
     /** Seconds left when the last door opened. */
     finalTime: t.uint16().default(0),
-    /** Clue ids, in the order they were found. They persist across loops and rooms. */
-    clues: t.array("string"),
+    /** Each detective's own journal: clue ids in the order found. Kept across loops and rooms. */
+    clues1: t.array("string"),
+    clues2: t.array("string"),
     events: t.array(GameEvent),
     eventSeq: t.uint32().default(0),
 
     // Room 1 · the office
     paintClicks: t.uint8().default(0),
-    paintMask: t.uint8().default(0),
-    paintTick: t.uint32().default(0),
     keyVisible: t.boolean().default(false),
     /** 0 nobody, otherwise the slot holding the key. */
     keyHolder: t.uint8().default(0),
@@ -75,7 +74,7 @@ export const TimeLoopState = BaseState.extend(
     // Room 2 · the archive
     shelfStep: t.uint8().default(0),
     archiveCabinetOpen: t.boolean().default(false),
-    /** Bit 0 = month entered by detective 1, bit 1 = day entered by detective 2. */
+    /** Bit 0 = day typed by detective 1, bit 1 = month typed by detective 2. */
     archiveMask: t.uint8().default(0),
     archiveDone: t.boolean().default(false),
 
@@ -92,6 +91,7 @@ export type TimeLoopState = SchemaType<typeof TimeLoopState>;
 export const TimeLoopInputSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("interact"), target: z.enum(TARGETS) }),
   z.object({ type: z.literal("code"), kind: z.enum(CODE_KINDS), value: z.string().max(8) }),
+  z.object({ type: z.literal("share"), clue: z.enum(CLUE_IDS) }),
   z.object({ type: z.literal("ready") }),
   z.object({ type: z.literal("restart") }),
 ]);
@@ -113,6 +113,5 @@ export const TimeLoopConfigSchema = RoomSettingsSchema.extend({
     )
     .length(LEVEL_COUNT),
   resetSeconds: z.number().positive().describe("How long the loop-reset screen lasts"),
-  paintWindowSeconds: z.number().positive().describe("Both detectives must push the painting within this"),
 });
 export type TimeLoopConfig = z.infer<typeof TimeLoopConfigSchema>;

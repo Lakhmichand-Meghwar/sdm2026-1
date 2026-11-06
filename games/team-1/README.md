@@ -6,7 +6,7 @@ This folder holds Team 1's work. Follow the workflow in [AGENTS.md](../../AGENTS
 
 A two-player cooperative room escape. Each detective plays on their own device, in the same room, against a clock that resets the room. Three rooms (the Office, the Archive, the Vault) get shorter and harder. What you learn carries over.
 
-Three things need both of you: the heavy painting in the Office, the two-half keypad in the Archive, and the split power panel in the Vault.
+Each detective can only use some of the things in a room. What you read goes in your own journal, and the other player only learns it when you tell them (the "Tell partner" button, or just say it). The briefing before each room lists what each of you does. Things you can't use are dimmed on your screen.
 
 ### Run it
 
@@ -26,7 +26,7 @@ This starts the game server on port 2567 and the client on port 5173.
 
 | Path | What it holds |
 |---|---|
-| `shared/rules.ts` | Levels, clues, codes and puzzle answers |
+| `shared/rules.ts` | Levels, clues, codes, puzzle answers and who owns each object (`OWNER`) |
 | `shared/index.ts` | Room state, inputs and config schema |
 | `shared/game.ts` | The rules: one deterministic `step` for both players |
 | `config/game.json` | Timers, penalties and tuning values |

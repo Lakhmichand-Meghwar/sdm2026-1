@@ -2,8 +2,9 @@ import { runReplay, Simulation } from "@sdm/core/server";
 import { describe, expect, it } from "vitest";
 import { timeLoopGame as game } from "./game.ts";
 import type { TimeLoopInput } from "./index.ts";
-import { type CodeKind, SHELF_ORDER, type Target } from "./rules.ts";
+import { type ClueId, type CodeKind, SHELF_ORDER, type Target } from "./rules.ts";
 
+/** "a" is detective 1 (slot 1), "b" is detective 2 (slot 2). */
 type Who = "a" | "b";
 
 function makeRoom() {
@@ -30,7 +31,9 @@ function makeRoom() {
     act,
     tap: (who: Who, target: Target) => act(who, { type: "interact", target }),
     code: (who: Who, kind: CodeKind, value: string) => act(who, { type: "code", kind, value }),
+    share: (who: Who, clue: ClueId) => act(who, { type: "share", clue }),
     lastEvent: () => sim.state.events[sim.state.events.length - 1],
+    journal: (who: Who) => Array.from(who === "a" ? sim.state.clues1 : sim.state.clues2),
   };
 }
 
@@ -56,18 +59,13 @@ function ready(room: Room): void {
   room.act("b", { type: "ready" });
 }
 
-/** The painting is heavy: both detectives push within the window. */
-function pushTogether(room: Room): void {
-  room.tap("a", "painting");
-  room.tap("b", "painting");
-}
-
 function clearOffice(room: Room): void {
-  room.tap("a", "note");
-  for (let i = 0; i < 4; i++) pushTogether(room);
+  room.tap("b", "note");
+  for (let i = 0; i < 4; i++) room.tap("a", "painting");
   room.tap("a", "key");
   room.tap("b", "cabinet");
   room.tap("a", "photo");
+  room.share("a", "year1998");
   room.tap("b", "laptop");
   room.code("b", "laptop", "1998");
   room.tap("a", "door1");
@@ -75,20 +73,22 @@ function clearOffice(room: Room): void {
 
 function clearArchive(room: Room): void {
   room.tap("a", "card");
+  room.share("a", "shelforder");
+  for (const book of SHELF_ORDER) room.tap("b", `book${book}` as Target);
+  room.tap("a", "key2");
+  room.tap("b", "filing");
+  room.tap("a", "folder");
   room.tap("b", "calendar");
-  for (const book of SHELF_ORDER) room.tap("a", `book${book}` as Target);
-  room.tap("b", "key2");
-  room.tap("a", "filing");
-  room.tap("b", "folder");
   room.tap("a", "door2");
-  room.code("a", "archive", "04");
+  room.code("a", "archive", "17");
   room.tap("b", "door2");
-  room.code("b", "archive", "17");
+  room.code("b", "archive", "04");
   room.tap("a", "door2");
 }
 
 function clearVault(room: Room): void {
-  room.tap("a", "poster");
+  room.tap("b", "poster");
+  room.share("b", "switchpattern");
   room.tap("a", "sw0");
   room.tap("b", "sw2");
   room.tap("b", "sw3");
@@ -150,9 +150,9 @@ describe("clock", () => {
     expect(room.state.timeLeft).toBe(before - 1);
   });
 
-  it("resets the room when time runs out and keeps the clues", () => {
+  it("resets the room when time runs out and keeps each journal", () => {
     const room = started();
-    room.tap("a", "note");
+    room.tap("b", "note");
     room.tap("a", "painting");
     room.tick(game.config.tickRate * (game.config.levels[0]?.duration ?? 0));
     expect(room.state.phase).toBe("resetting");
@@ -161,36 +161,72 @@ describe("clock", () => {
     expect(room.state.phase).toBe("playing");
     expect(room.state.loop).toBe(2);
     expect(room.state.timeLeft).toBe(game.config.levels[0]?.duration);
-    expect(room.state.paintMask).toBe(0);
-    expect(Array.from(room.state.clues)).toEqual(["blue4"]);
+    expect(room.state.paintClicks).toBe(0);
+    expect(room.journal("b")).toEqual(["blue4"]);
+    expect(room.journal("a")).toEqual([]);
+  });
+});
+
+describe("who can do what", () => {
+  it("only lets each detective use their own things", () => {
+    const room = started();
+    room.tap("b", "painting");
+    expect(room.state.paintClicks).toBe(0);
+    expect(room.lastEvent()?.kind).toBe("warn");
+    expect(room.lastEvent()?.by).toBe(2);
+    room.tap("a", "painting");
+    expect(room.state.paintClicks).toBe(1);
+  });
+
+  it("lets either detective use a shared door", () => {
+    const room = started();
+    room.tap("a", "door1");
+    expect(room.lastEvent()?.text).toContain("locked");
+    room.tap("b", "door1");
+    expect(room.lastEvent()?.text).toContain("locked");
+  });
+
+  it("keeps what a detective reads private until they share it", () => {
+    const room = started();
+    room.tap("b", "note");
+    expect(room.journal("b")).toEqual(["blue4"]);
+    expect(room.journal("a")).toEqual([]);
+
+    const events = Array.from(room.state.events);
+    const detail = events.find((e) => e.text.includes("Blue — 4"));
+    expect(detail?.by).toBe(2);
+    expect(events.filter((e) => e.by === 0).every((e) => !e.text.includes("Blue"))).toBe(true);
+
+    room.share("b", "blue4");
+    expect(room.journal("a")).toEqual(["blue4"]);
+    expect(room.lastEvent()?.by).toBe(2);
+  });
+
+  it("will not share a clue the sender does not have", () => {
+    const room = started();
+    room.share("a", "blue4");
+    expect(room.journal("b")).toEqual([]);
   });
 });
 
 describe("room 1 · the office", () => {
-  it("needs both detectives to push the painting", () => {
-    const room = started();
-    room.tap("a", "painting");
-    room.tap("a", "painting");
-    expect(room.state.paintClicks).toBe(0);
-    room.tap("b", "painting");
-    expect(room.state.paintClicks).toBe(1);
-  });
-
-  it("forgets a lone push after the window", () => {
-    const room = started();
-    room.tap("a", "painting");
-    room.tick(Math.ceil(game.config.paintWindowSeconds * game.config.tickRate) + 2);
-    room.tap("b", "painting");
-    expect(room.state.paintClicks).toBe(0);
-    room.tap("a", "painting");
-    expect(room.state.paintClicks).toBe(1);
-  });
-
   it("keeps the wardrobe locked until somebody has the key", () => {
     const room = started();
-    room.tap("a", "cabinet");
+    room.tap("b", "cabinet");
     expect(room.state.cabinetOpen).toBe(false);
     expect(room.lastEvent()?.kind).toBe("warn");
+  });
+
+  it("opens the wardrobe for the other detective once the key is picked up", () => {
+    const room = started();
+    for (let i = 0; i < 4; i++) room.tap("a", "painting");
+    expect(room.state.keyVisible).toBe(true);
+    room.tap("a", "key");
+    expect(room.state.keyHolder).toBe(1);
+    room.tap("b", "cabinet");
+    expect(room.state.cabinetOpen).toBe(true);
+    expect(room.journal("a")).toContain("findyear");
+    expect(room.journal("b")).toContain("findyear");
   });
 
   it("asks only the player who touched the laptop for the code", () => {
@@ -205,7 +241,7 @@ describe("room 1 · the office", () => {
   it("does not punish a wrong code in the first room", () => {
     const room = started();
     const before = room.state.timeLeft;
-    room.code("a", "laptop", "0000");
+    room.code("b", "laptop", "0000");
     expect(room.state.timeLeft).toBe(before);
     expect(room.lastEvent()?.kind).toBe("codebad");
   });
@@ -232,40 +268,47 @@ describe("room 2 · the archive", () => {
 
   it("takes time for a wrong book and starts the shelf over", () => {
     const room = inArchive();
-    room.tap("a", "book2");
+    room.tap("b", "book2");
     expect(room.state.timeLeft).toBe(75);
     expect(room.state.shelfStep).toBe(0);
   });
 
+  it("keeps the pulling of the books to detective 2", () => {
+    const room = inArchive();
+    room.tap("a", "book1");
+    expect(room.state.shelfStep).toBe(0);
+    expect(room.lastEvent()?.kind).toBe("warn");
+  });
+
   it("takes time for a wrong code", () => {
     const room = inArchive();
-    room.code("a", "archive", "17");
+    room.code("a", "archive", "04");
     expect(room.state.timeLeft).toBe(75);
   });
 
-  it("splits the keypad: detective 1 enters the month, detective 2 the day", () => {
+  it("splits the keypad: detective 1 types the day, detective 2 the month", () => {
     const room = inArchive();
-    room.code("a", "archive", "04");
+    room.code("a", "archive", "17");
+    expect(room.state.archiveDone).toBe(false);
+    expect(room.state.archiveMask).toBe(1);
+    room.code("b", "archive", "17");
     expect(room.state.archiveDone).toBe(false);
     room.code("b", "archive", "04");
-    expect(room.state.archiveDone).toBe(false);
-    room.code("b", "archive", "17");
     expect(room.state.archiveDone).toBe(true);
   });
 
   it("keeps the filing cabinet locked without the key", () => {
     const room = inArchive();
-    room.tap("a", "filing");
+    room.tap("b", "filing");
     expect(room.state.archiveCabinetOpen).toBe(false);
   });
 
   it("ignores things that belong to another room", () => {
     const room = inArchive();
-    room.tap("a", "note");
-    expect(Array.from(room.state.clues)).toContain("blue4");
-    const count = room.state.clues.length;
-    room.tap("a", "poster");
-    expect(room.state.clues.length).toBe(count);
+    const before = room.journal("b").length;
+    room.tap("b", "note");
+    room.tap("b", "poster");
+    expect(room.journal("b").length).toBe(before);
   });
 });
 
@@ -292,8 +335,8 @@ describe("room 3 · the vault", () => {
   it("keeps the terminal and safe dead until the power is on", () => {
     const room = inVault();
     room.tap("a", "terminal");
-    expect(Array.from(room.state.clues)).not.toContain("safecode");
-    room.tap("a", "safe");
+    expect(room.journal("a")).not.toContain("safecode");
+    room.tap("b", "safe");
     expect(room.lastEvent()?.kind).toBe("warn");
   });
 
@@ -303,9 +346,9 @@ describe("room 3 · the vault", () => {
     room.tap("b", "sw2");
     room.tap("b", "sw3");
     expect(room.state.powered).toBe(true);
-    room.code("a", "vault", "1998");
+    room.code("b", "vault", "1998");
     expect(room.state.safeOpen).toBe(false);
-    room.code("a", "vault", "8991");
+    room.code("b", "vault", "8991");
     expect(room.state.safeOpen).toBe(true);
   });
 });
@@ -321,11 +364,14 @@ describe("whole game", () => {
     return room;
   }
 
-  it("can be won, and the journal holds every clue", () => {
+  it("can be won, and each journal holds what that detective learned", () => {
     const room = playThrough();
     expect(room.state.phase).toBe("won");
     expect(room.state.totalLoops).toBe(3);
-    expect(room.state.clues.length).toBe(8);
+    expect(room.journal("a")).toEqual(
+      expect.arrayContaining(["year1998", "shelforder", "month04", "safecode"]),
+    );
+    expect(room.journal("b")).toEqual(expect.arrayContaining(["blue4", "day17", "switchpattern"]));
   });
 
   it("starts over on restart", () => {
@@ -333,7 +379,8 @@ describe("whole game", () => {
     room.act("a", { type: "restart" });
     expect(room.state.phase).toBe("briefing");
     expect(room.state.level).toBe(1);
-    expect(room.state.clues.length).toBe(0);
+    expect(room.journal("a")).toEqual([]);
+    expect(room.journal("b")).toEqual([]);
     expect(room.state.totalLoops).toBe(0);
   });
 
