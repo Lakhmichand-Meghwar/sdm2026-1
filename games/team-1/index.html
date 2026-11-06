@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Time Loop Escape</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- ── START SCREEN ── -->
+    <div id="screen-start" class="fullscreen">
+      <div class="start-inner">
+        <div class="start-logo">
+          <h1>Time Loop<br />Escape</h1>
+          <p class="start-sub">Two detectives. One loop. Escape together.</p>
+        </div>
+        <p class="start-lore">
+          Two detectives wake up in a locked room.
+          <strong>90 seconds</strong> before the loop resets.<br />
+          Objects vanish. <strong>Your knowledge doesn't.</strong>
+        </p>
+        <button id="btn-start" class="btn-primary">Begin</button>
+      </div>
+    </div>
+
+    <!-- ── GAME SCREEN ── -->
+    <div id="screen-game" class="fullscreen hidden">
+      <!-- TOP BAR -->
+      <header id="top-bar">
+        <div class="top-left">
+          <div class="active-player-badge">
+            <span class="apb-player active" id="apb-p1">P1</span>
+            <span class="apb-sep">→</span>
+            <span class="apb-player" id="apb-p2">P2</span>
+          </div>
+        </div>
+        <div class="top-title">
+          <span class="title-line"></span>
+          <h2>Time Loop Escape</h2>
+          <span class="title-line"></span>
+        </div>
+        <div class="top-right">
+          <div id="loop-badge" class="loop-badge">Loop <span id="loop-num">1</span></div>
+          <div id="timer-box" class="timer-box">
+            <span id="timer-display">01:30</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ROOM -->
+      <main id="room">
+        <!-- ambient lighting layers -->
+        <div class="room-wall"></div>
+        <div class="room-floor"></div>
+        <div class="room-ceil-shadow"></div>
+        <div class="lamp-glow" id="lamp-glow"></div>
+        <div class="window-glow"></div>
+
+        <!-- WINDOW (top-left) -->
+        <div class="obj r-window" id="obj-window">
+          <div class="window-outer">
+            <canvas id="rain-canvas" class="rain-canvas"></canvas>
+            <div class="blinds">
+              <div class="blind-slat"></div><div class="blind-slat"></div>
+              <div class="blind-slat"></div><div class="blind-slat"></div>
+              <div class="blind-slat"></div><div class="blind-slat"></div>
+              <div class="blind-slat"></div>
+            </div>
+            <div class="window-cross-h"></div>
+            <div class="window-cross-v"></div>
+          </div>
+          <div class="window-sill"></div>
+        </div>
+
+        <!-- LEFT DESK -->
+        <div class="r-desk-l">
+          <div class="desk-surface-l">
+            <div class="desk-lamp-arm"></div>
+            <div class="desk-lamp-head"></div>
+            <div class="book-stack">
+              <div class="book b1"></div>
+              <div class="book b2"></div>
+              <div class="book b3"></div>
+            </div>
+            <div class="notebook"></div>
+          </div>
+          <div class="desk-leg dl1"></div>
+          <div class="desk-leg dl2"></div>
+        </div>
+
+        <!-- STICKY NOTE (on left desk, interactive) -->
+        <div class="obj interactive r-note" id="obj-note">
+          <div class="sticky-wrap">
+            <div class="sticky-pin"></div>
+            <div class="sticky-paper">
+              <span class="sticky-line">BLUE</span>
+              <span class="sticky-line big">— 4</span>
+            </div>
+          </div>
+          <div class="obj-tooltip">Sticky note</div>
+        </div>
+
+        <!-- BLUE PAINTING (interactive) -->
+        <div class="obj interactive r-painting" id="obj-painting">
+          <div class="painting-outer-frame">
+            <div class="painting-mat">
+              <div class="painting-art">
+                <div class="paint-sky"></div>
+                <div class="paint-mountain-far"></div>
+                <div class="paint-mountain-near"></div>
+                <div class="paint-water"></div>
+                <div class="paint-reflect"></div>
+              </div>
+            </div>
+          </div>
+          <div class="paint-counter" id="paint-counter">0 / 4</div>
+          <div class="obj-tooltip">Blue painting</div>
+        </div>
+
+        <!-- HIDDEN KEY (appears after painting) -->
+        <div class="obj interactive r-key hidden" id="obj-key">
+          <div class="key-float">🗝</div>
+          <div class="obj-tooltip">Hidden key</div>
+        </div>
+
+        <!-- PLANT (decorative) -->
+        <div class="r-plant">
+          <div class="plant-leaves">
+            <div class="leaf l1"></div>
+            <div class="leaf l2"></div>
+            <div class="leaf l3"></div>
+            <div class="leaf l4"></div>
+          </div>
+          <div class="plant-pot"></div>
+        </div>
+
+        <!-- CABINET / WARDROBE (interactive) -->
+        <div class="obj interactive r-cabinet" id="obj-cabinet">
+          <div class="cabinet-wrap">
+            <div class="cabinet-top-crown"></div>
+            <div class="cabinet-doors" id="cab-doors">
+              <div class="cab-door left-door">
+                <div class="door-inner-panel"></div>
+                <div class="door-handle dh-left"></div>
+              </div>
+              <div class="cab-divider"></div>
+              <div class="cab-door right-door">
+                <div class="door-inner-panel"></div>
+                <div class="door-handle dh-right"></div>
+              </div>
+              <div class="cab-lock-shape locked" id="cab-lock"></div>
+            </div>
+            <div class="cabinet-open-interior hidden" id="cab-interior">
+              <span>Photograph inside</span>
+              <span class="interior-hint">(examine the corkboard)</span>
+            </div>
+            <div class="cabinet-base"></div>
+          </div>
+          <div class="obj-tooltip" id="cab-label">Wardrobe</div>
+        </div>
+
+        <!-- CORK BOARD (on wall) -->
+        <div class="r-corkboard">
+          <div class="cork-frame">
+            <div class="cork-surface">
+              <div class="cork-sticky cs1"></div>
+              <div class="cork-sticky cs2"></div>
+              <div class="cork-sticky cs3"></div>
+
+              <!-- PHOTOGRAPH (interactive after cabinet opens) -->
+              <div class="obj r-photo hidden" id="obj-photo">
+                <div class="photo-pin"></div>
+                <div class="photo-frame-outer">
+                  <div class="photo-frame-inner">
+                    <div class="photo-scene">
+                      <div class="photo-sky"></div>
+                      <div class="photo-building"></div>
+                      <div class="photo-ground"></div>
+                    </div>
+                    <div class="photo-year-label">1998</div>
+                  </div>
+                </div>
+                <div class="obj-tooltip">Old photograph</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT DESK -->
+        <div class="r-desk-r">
+          <div class="desk-surface-r">
+            <div class="pen-holder">
+              <div class="pen p1"></div>
+              <div class="pen p2"></div>
+              <div class="pen p3"></div>
+            </div>
+          </div>
+          <div class="desk-leg dr1"></div>
+          <div class="desk-leg dr2"></div>
+        </div>
+
+        <!-- LAPTOP (interactive) -->
+        <div class="obj interactive r-laptop" id="obj-laptop">
+          <div class="laptop-lid">
+            <div class="laptop-bezel">
+              <div class="screen-content" id="screen-locked">
+                <div class="screen-lock-icon">🔒</div>
+                <div class="screen-dots">
+                  <span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+              <div class="screen-content hidden" id="screen-open">
+                <div class="screen-check">✓</div>
+                <div class="screen-ok-text">Unlocked</div>
+              </div>
+            </div>
+            <div class="laptop-camera"></div>
+          </div>
+          <div class="laptop-base">
+            <div class="laptop-keyboard"></div>
+            <div class="laptop-trackpad"></div>
+          </div>
+          <div class="obj-tooltip">Laptop</div>
+        </div>
+
+        <!-- EXIT DOOR (interactive) -->
+        <div class="obj interactive r-door" id="obj-door">
+          <div class="exit-door-frame">
+            <div class="exit-door-body">
+              <div class="door-molding-top"></div>
+              <div class="door-panel-t"></div>
+              <div class="door-panel-b"></div>
+              <div class="door-knob"></div>
+            </div>
+          </div>
+          <div class="obj-tooltip">Exit door</div>
+        </div>
+
+        <!-- TOAST -->
+        <div id="toast-area"></div>
+      </main>
+
+      <!-- BOTTOM HUD: 2-player layout -->
+      <footer id="bottom-hud">
+        <!-- PLAYER 1 -->
+        <div class="player-card active" id="player-1-card">
+          <div class="player-info">
+            <span class="player-name">Player 1</span>
+            <span class="player-turn" id="p1-turn">Your turn</span>
+          </div>
+          <div class="inv-slot" id="p1-slot">
+            <div class="inv-item hidden" id="p1-key">🗝</div>
+          </div>
+        </div>
+
+        <div class="hud-divider"></div>
+
+        <!-- CLUES (center) -->
+        <div class="hud-clues">
+          <span class="hud-label">Clues</span>
+          <ul id="clue-list">
+            <li class="clue-empty">No clues yet — explore the room.</li>
+          </ul>
+        </div>
+
+        <div class="hud-divider"></div>
+
+        <!-- PLAYER 2 -->
+        <div class="player-card" id="player-2-card">
+          <div class="inv-slot" id="p2-slot">
+            <div class="inv-item hidden" id="p2-key">🗝</div>
+          </div>
+          <div class="player-info right">
+            <span class="player-name">Player 2</span>
+            <span class="player-turn" id="p2-turn">Waiting</span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- ── LOOP RESET OVERLAY ── -->
+    <div id="screen-reset" class="fullscreen hidden overlay">
+      <canvas id="particle-canvas"></canvas>
+      <div class="reset-inner">
+        <div class="reset-title">Time expires</div>
+        <div class="reset-sub">The loop resets…</div>
+        <div class="reset-loop-num" id="reset-loop-num">Loop 2</div>
+        <div class="reset-info">
+          Items erased. Your <strong>knowledge remains</strong>.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LAPTOP MODAL ── -->
+    <div id="modal-laptop" class="fullscreen hidden overlay modal-backdrop">
+      <div class="modal-box">
+        <div class="modal-titlebar">
+          <span>Access control system</span>
+          <button class="modal-close" id="modal-close">✕</button>
+        </div>
+        <div class="modal-screen">
+          <div class="modal-os-line">SECURE OS v2.1 — enter year code</div>
+          <div class="modal-scanlines"></div>
+          <input
+            id="code-input"
+            class="code-input"
+            type="text"
+            maxlength="4"
+            placeholder="_ _ _ _"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div class="modal-status" id="modal-status"></div>
+        </div>
+        <div class="modal-hint" id="modal-hint">Enter the correct 4-digit year to unlock the door.</div>
+        <div class="modal-actions">
+          <button class="btn-secondary" id="modal-cancel">Cancel</button>
+          <button class="btn-primary" id="modal-submit">Enter</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VICTORY SCREEN ── -->
+    <div id="screen-win" class="fullscreen hidden">
+      <div class="win-inner">
+        <div class="win-title">Escaped</div>
+        <div class="win-stats">
+          <div class="stat-card">
+            <span class="stat-num" id="stat-loops">1</span>
+            <span class="stat-label">Loops</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-num" id="stat-time">0s</span>
+            <span class="stat-label">Time left</span>
+          </div>
+        </div>
+        <p class="win-msg" id="win-msg"></p>
+        <button class="btn-primary" id="btn-restart">Play again</button>
+      </div>
+    </div>
+
+    <script type="module" src="/client/main.ts"></script>
+  </body>
+</html>
