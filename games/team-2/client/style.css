@@ -348,3 +348,128 @@ kbd {
     transition: none;
   }
 }
+
+#ward-app {
+  min-height: 100dvh;
+  background: #100d10;
+}
+
+#ward-app:fullscreen {
+  overflow: auto;
+}
+
+#ward-app:has(#game:not([hidden])) header {
+  display: none;
+}
+
+#lobby {
+  max-width: 36rem;
+}
+
+.scene {
+  width: min(100%, 112dvh);
+  margin-inline: auto;
+}
+
+.controls {
+  padding-block: 0.5rem;
+}
+
+[data-target="note"] {
+  border-color: #ffd58a;
+  box-shadow: 0 0 1rem #ffbe6666;
+}
+
+[data-target="desk"] {
+  --x: 34%;
+  --y: 56%;
+}
+
+.patient[data-station="desk"] {
+  --x: 38%;
+  --y: 69%;
+}
+
+.inventory-drawer {
+  position: fixed;
+  z-index: 5;
+  inset: 0 0 0 auto;
+  width: min(23rem, 100vw);
+  margin: 0;
+  overflow: auto;
+  box-shadow: -1rem 0 3rem #0009;
+}
+
+#drawer li {
+  margin-block: 0.5rem;
+}
+
+#collect,
+#inspect-inventory,
+#lock {
+  margin-top: 0.75rem;
+}
+
+.evidence[data-kind="note"] {
+  color: #27190f;
+  background: radial-gradient(ellipse at 44% 40%, #f6deb1 25%, #c79355 66%, #322017 98%);
+  border-color: #472615;
+  transform: rotate(-1deg);
+}
+
+.evidence[data-kind="desk"] {
+  border-color: #734b39;
+  background: #261b1a;
+  color: #f5dfcb;
+  box-shadow: inset 0 0 1.5rem #000;
+}
+
+.evidence[data-kind="desk"][data-pickup="knife"]::before {
+  content: "";
+  display: block;
+  width: 7rem;
+  height: 1.25rem;
+  margin: 0.5rem auto 1rem;
+  background: linear-gradient(90deg, #75513e 33%, #e1e8e8 34%, #909da1);
+  clip-path: polygon(0 20%, 35% 20%, 35% 0, 100% 0, 86% 65%, 35% 65%, 35% 85%, 0 85%);
+}
+
+.ghost-overlay {
+  position: fixed;
+  z-index: 6;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.65rem;
+  padding: 1rem;
+  text-align: center;
+  background: radial-gradient(ellipse, #261736e8, #06070bf7);
+}
+
+.ghost-overlay[hidden] {
+  display: none;
+}
+
+.ghost-face {
+  width: 6rem;
+  height: 8rem;
+  border-radius: 50% 50% 40% 40%;
+  background:
+    radial-gradient(ellipse at 35% 38%, #171122 0 8%, transparent 10%),
+    radial-gradient(ellipse at 65% 38%, #171122 0 8%, transparent 10%),
+    radial-gradient(ellipse at 50% 67%, #171122 0 10%, transparent 12%),
+    radial-gradient(ellipse at 50% 35%, #d7cded, #8f79b6 55%, transparent 76%);
+  filter: drop-shadow(0 0 1.5rem #b49aeb);
+}
+
+.ghost-overlay progress {
+  display: block;
+  width: min(8rem, 33vw);
+  accent-color: #b49aeb;
+}
+
+#hold-ghost {
+  touch-action: none;
+  user-select: none;
+}

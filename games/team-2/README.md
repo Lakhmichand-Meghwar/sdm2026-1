@@ -1,6 +1,6 @@
 # Ward 04
 
-Two players on separate computers share one three-minute countdown. Investigate the ward, collect clues, and open the exit together. The notebook shares discovered clues during an attempt. At 00:00 both players lose, and either can restart for both once two players are connected. Restart clears clues and items.
+Two players on separate computers share one three-minute countdown. Investigate the ward, collect clues, and open the exit together. The inventory drawer shares tools and clues during an attempt. Start with the burnt paper at station 1 and investigate the desk. Both players must hold E for five continuous seconds when the ghost appears. At 00:00 both players lose, and either can restart for both once two players are connected. Restart clears clues and items.
 
 ## Play on a local network
 

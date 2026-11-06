@@ -1,8 +1,10 @@
+﻿import { newSeed, SeededRandom } from "@sdm/core/shared";
 import { type Client, Room } from "colyseus";
+import { z } from "zod";
+import ghostConfig from "../config/ghost.json" with { type: "json" };
 import {
   actionSchema,
   type EscapeAction,
-  type EscapeClue,
   type EscapeSnapshot,
   escapeRoomName,
   runSeconds,
@@ -11,160 +13,209 @@ import {
 
 const ticksPerSecond = 1000 / tickMs;
 const runTicks = runSeconds * ticksPerSecond;
+const ghost = z
+  .object({
+    earliestGhostSeconds: z.number().int().positive(),
+    latestGhostSeconds: z.number().int().lt(runSeconds),
+    encounterSeconds: z.number().int().positive(),
+    resistanceSeconds: z.literal(5),
+  })
+  .refine(
+    (config) =>
+      config.latestGhostSeconds >= config.earliestGhostSeconds &&
+      config.encounterSeconds >= config.resistanceSeconds,
+  )
+  .parse(ghostConfig);
+const resistanceTicks = ghost.resistanceSeconds * ticksPerSecond;
+const encounterTicks = ghost.encounterSeconds * ticksPerSecond;
+const photoYear = "1973";
 
 export class EscapeRun {
-  private readonly notebook = new Set<EscapeClue>();
+  private readonly holding = new Set<string>();
   private ticksLeft = runTicks;
-  private contactTicks = 0;
-  private knocks = 0;
+  private paperCode = "";
+  private ghostAt = 0;
+  private ghostTicks = 0;
+  private survived = false;
   readonly state: EscapeSnapshot = {
     phase: "waiting",
-    players: 0,
-    attempt: 1,
     patients: [],
+    attempt: 1,
     seconds: runSeconds,
-    clues: [],
-    hasKey: false,
+    paper: null,
+    inventory: [],
+    paintingCut: false,
     cabinetOpen: false,
-    terminalUnlocked: false,
-    exitContact: null,
-    message: "The ward is waiting for two patients.",
+    year: null,
+    ghostSeconds: null,
+    message: "Waiting for two patients.",
   };
 
-  join(sessionId: string) {
-    const slot = this.state.patients.some((patient) => patient.slot === 1) ? 2 : 1;
-    this.state.patients.push({ id: sessionId, slot, station: null });
-    this.state.players = this.state.patients.length;
-    if (this.state.players === 2 && this.state.phase === "waiting") {
-      this.state.phase = "running";
-      this.state.message = "The door locks. Something behind the wall starts counting.";
+  constructor(private readonly random = new SeededRandom(newSeed())) {}
+
+  private start() {
+    const next = String(this.random.int(1000, 9999));
+    this.paperCode = next === this.paperCode ? String(1000 + ((Number(next) - 999) % 9000)) : next;
+    this.ghostAt = this.random.int(ghost.earliestGhostSeconds, ghost.latestGhostSeconds) * ticksPerSecond;
+    this.ticksLeft = runTicks;
+    this.ghostTicks = 0;
+    this.survived = false;
+    this.holding.clear();
+    Object.assign(this.state, {
+      phase: "running",
+      seconds: runSeconds,
+      paper: null,
+      inventory: [],
+      paintingCut: false,
+      cabinetOpen: false,
+      year: null,
+      ghostSeconds: null,
+      message: "Start with the paper marked 1 on the ward desk.",
+    });
+    for (const patient of this.state.patients) {
+      patient.station = null;
+      patient.resistance = 0;
     }
   }
 
-  leave(sessionId: string) {
-    this.state.patients = this.state.patients.filter((patient) => patient.id !== sessionId);
-    this.state.players = this.state.patients.length;
-    if (this.state.exitContact === sessionId) this.state.exitContact = null;
-    if (this.state.phase === "running") {
+  join(id: string) {
+    const slot = this.state.patients.some((patient) => patient.slot === 1) ? 2 : 1;
+    this.state.patients.push({ id, slot, station: null, resistance: 0 });
+    if (this.state.patients.length === 2 && this.state.phase === "waiting") this.start();
+  }
+
+  leave(id: string) {
+    this.state.patients = this.state.patients.filter((patient) => patient.id !== id);
+    this.holding.delete(id);
+    if (this.state.phase === "running")
       this.state.message = "Your partner vanished. The clock is still running.";
-    }
+  }
+
+  private summonGhost() {
+    this.ghostTicks = encounterTicks;
+    this.state.ghostSeconds = encounterTicks / ticksPerSecond;
+    this.holding.clear();
+    this.state.message = "A ghost blocks the ward. Both players must hold E for five seconds.";
+  }
+
+  private fail(message: string) {
+    this.state.phase = "failed";
+    this.state.ghostSeconds = null;
+    this.holding.clear();
+    this.state.message = message;
   }
 
   tick() {
     if (this.state.phase !== "running") return false;
-    if (this.state.exitContact && --this.contactTicks === 0) {
-      this.state.exitContact = null;
-      this.state.message = "The contact went cold. Try the door together again.";
-      this.updateTimer();
+    this.ticksLeft -= 1;
+    const previous = this.state.seconds;
+    this.state.seconds = Math.ceil(this.ticksLeft / ticksPerSecond);
+    if (this.ticksLeft === 0) {
+      this.fail("Time ran out. Restart together to try again.");
       return true;
     }
-    return this.updateTimer();
-  }
-
-  private updateTimer() {
-    this.ticksLeft -= 1;
-    if (this.ticksLeft === 0) {
-      this.state.phase = "failed";
-      this.state.exitContact = null;
-      this.state.message = "The ward has sealed. Restart to make another attempt.";
-    }
-    const seconds = Math.ceil(this.ticksLeft / ticksPerSecond);
-    if (seconds === this.state.seconds) return false;
-    this.state.seconds = seconds;
-    return true;
-  }
-
-  private remember(clue: EscapeClue) {
-    this.notebook.add(clue);
-    this.state.clues = [...this.notebook];
-  }
-
-  act(sessionId: string, action: EscapeAction) {
-    if (action.type === "restart") {
-      if (this.state.players !== 2 || (this.state.phase !== "failed" && this.state.phase !== "escaped"))
-        return;
-      this.notebook.clear();
-      this.knocks = 0;
-      this.contactTicks = 0;
-      this.ticksLeft = runTicks;
-      Object.assign(this.state, {
-        phase: "running",
-        attempt: this.state.attempt + 1,
-        seconds: runSeconds,
-        clues: [],
-        hasKey: false,
-        cabinetOpen: false,
-        terminalUnlocked: false,
-        exitContact: null,
-        message: "The ward opens its eyes again.",
-      });
-      for (const patient of this.state.patients) patient.station = null;
-      return;
-    }
-    if (this.state.phase !== "running") return;
-    const patient = this.state.patients.find((entry) => entry.id === sessionId);
-    if (!patient) return;
-    if (action.type === "move") {
-      patient.station = action.station;
-      return;
-    }
-    if (action.type === "flip-photo") {
-      if (patient.station !== "photo") return;
-      this.remember("photo");
-      this.state.message = "The year on the back of the photograph goes into the notebook.";
-      return;
-    }
-    if (action.type === "password") {
-      patient.station = "terminal";
-      if (!this.state.cabinetOpen) this.state.message = "The terminal is unpowered. Check the cabinet.";
-      else if (
-        !this.state.patients.some((partner) => partner.id !== sessionId && partner.station === "cabinet")
+    if (this.ghostTicks > 0) {
+      this.ghostTicks -= 1;
+      this.state.ghostSeconds = Math.ceil(this.ghostTicks / ticksPerSecond);
+      for (const patient of this.state.patients) {
+        if (patient.resistance === resistanceTicks) continue;
+        patient.resistance = this.holding.has(patient.id)
+          ? Math.min(patient.resistance + 1, resistanceTicks)
+          : 0;
+      }
+      if (
+        this.state.patients.length === 2 &&
+        this.state.patients.every((patient) => patient.resistance === resistanceTicks)
       ) {
-        this.state.message = "No power. Your partner must stay at the cabinet relay.";
-      } else if (action.code !== "1973") this.state.message = "ACCESS DENIED. Something knocks back.";
-      else {
-        this.state.terminalUnlocked = true;
-        this.remember("terminal");
-        this.state.message = "The exit contacts light up. Both patients must touch the door.";
+        this.survived = true;
+        this.ghostTicks = 0;
+        this.holding.clear();
+        this.state.ghostSeconds = null;
+        this.state.message = "The ghost recedes. Keep looking for the exit.";
+      } else if (this.ghostTicks === 0) {
+        this.fail("The ghost caught you. Restart together to try again.");
+      }
+      return true;
+    }
+    if (!this.survived && runTicks - this.ticksLeft >= this.ghostAt) {
+      this.summonGhost();
+      return true;
+    }
+    return this.state.seconds !== previous;
+  }
+
+  act(id: string, action: EscapeAction) {
+    const patient = this.state.patients.find((entry) => entry.id === id);
+    if (!patient) return;
+    if (action.type === "restart") {
+      if (
+        this.state.patients.length === 2 &&
+        (this.state.phase === "failed" || this.state.phase === "escaped")
+      ) {
+        this.state.attempt += 1;
+        this.start();
       }
       return;
     }
-    patient.station = action.target;
-    switch (action.target) {
-      case "note":
-        this.remember("note");
-        this.state.message = "A note in blue ink. You add it to the notebook.";
+    if (this.state.phase !== "running") return;
+    if (action.type === "ward-off") {
+      if (this.ghostTicks === 0) return;
+      if (action.pressed) this.holding.add(id);
+      else {
+        this.holding.delete(id);
+        if (patient.resistance < resistanceTicks) patient.resistance = 0;
+      }
+      return;
+    }
+    if (this.ghostTicks > 0) return;
+
+    switch (action.type) {
+      case "move":
+        patient.station = action.station;
         break;
-      case "photo":
-        this.state.message = "Someone in the photograph has your face. Look at the back.";
+      case "inspect":
+        patient.station = action.station;
+        if (action.station === "note") this.state.paper = this.paperCode;
         break;
-      case "painting":
-        if (this.state.cabinetOpen) this.state.message = "The niche behind the painting is empty.";
-        else if (this.state.hasKey || ++this.knocks === 4) {
-          this.state.hasKey = true;
-          this.state.message = "The frame shifts. You take the rusted key.";
-        } else this.state.message = "The frame shudders. It sounds hollow.";
+      case "collect": {
+        const reachable =
+          action.item === "knife"
+            ? patient.station === "desk"
+            : patient.station === "painting" && this.state.paintingCut && !this.state.cabinetOpen;
+        if (!reachable || this.state.inventory.includes(action.item)) return;
+        this.state.inventory.push(action.item);
+        this.state.message =
+          action.item === "knife"
+            ? "Knife added to the shared inventory."
+            : "Key added to the shared inventory.";
         break;
-      case "cabinet":
-        if (!this.state.cabinetOpen && !this.state.hasKey) {
-          this.state.message = "Locked. There is a cable running from it to the terminal.";
-          break;
+      }
+      case "use":
+        if (!this.state.inventory.includes(action.item)) return;
+        if (action.item === "knife" && patient.station === "painting") {
+          this.state.paintingCut = true;
+          this.state.message = "The canvas tears. A key is tucked behind it.";
+        } else if (action.item === "key" && patient.station === "cabinet") {
+          this.state.inventory = this.state.inventory.filter((item) => item !== "key");
+          this.state.cabinetOpen = true;
+          this.state.message = "The medicine cabinet opens. Read the note inside.";
         }
-        this.state.hasKey = false;
-        this.state.cabinetOpen = true;
-        this.remember("cabinet");
-        this.state.message = "You find a note. Stay at the cabinet to power the terminal for your partner.";
         break;
-      case "exit":
-        if (!this.state.terminalUnlocked) this.state.message = "Two dead contacts. The exit is sealed.";
-        else if (this.state.exitContact === null) {
-          this.state.exitContact = sessionId;
-          this.contactTicks = 4 * ticksPerSecond;
-          this.state.message = "One contact is live. The other player has four seconds to touch the door.";
-        } else if (this.state.exitContact !== sessionId) {
-          this.state.phase = "escaped";
-          this.state.exitContact = null;
-          this.state.message = "The door opens. For the first time, the ticking stops.";
+      case "code":
+        if (patient.station === "photo" && this.state.cabinetOpen && this.state.paper) {
+          if (action.code === this.paperCode) {
+            this.state.year = photoYear;
+            this.state.message = "The photograph opens. Its year is now in the drawer.";
+          } else this.state.message = "The photograph lock rejects the code.";
+        } else if (patient.station === "exit" && this.state.year) {
+          if (action.code !== this.state.year) this.state.message = "The exit lock rejects the year.";
+          else if (this.state.patients.length !== 2)
+            this.state.message = "Both players must be connected to escape.";
+          else if (!this.survived) this.summonGhost();
+          else {
+            this.state.phase = "escaped";
+            this.state.message = "The lock clicks. Both patients are free.";
+          }
         }
         break;
     }
@@ -173,29 +224,29 @@ export class EscapeRun {
 
 class EscapeRoom extends Room {
   override maxClients = 2;
-  private readonly loop = new EscapeRun();
+  private readonly run = new EscapeRun();
 
   override onCreate() {
-    this.onMessage("sync", (client) => client.send("snapshot", this.loop.state));
+    this.onMessage("sync", (client) => client.send("snapshot", this.run.state));
     this.onMessage("action", (client, input: unknown) => {
       const action = actionSchema.safeParse(input);
       if (!action.success) return;
-      this.loop.act(client.sessionId, action.data);
-      this.broadcast("snapshot", this.loop.state);
+      this.run.act(client.sessionId, action.data);
+      this.broadcast("snapshot", this.run.state);
     });
     this.clock.setInterval(() => {
-      if (this.loop.tick()) this.broadcast("snapshot", this.loop.state);
+      if (this.run.tick()) this.broadcast("snapshot", this.run.state);
     }, tickMs);
   }
 
   override onJoin(client: Client) {
-    this.loop.join(client.sessionId);
-    this.broadcast("snapshot", this.loop.state);
+    this.run.join(client.sessionId);
+    this.broadcast("snapshot", this.run.state);
   }
 
   override onLeave(client: Client) {
-    this.loop.leave(client.sessionId);
-    this.broadcast("snapshot", this.loop.state);
+    this.run.leave(client.sessionId);
+    this.broadcast("snapshot", this.run.state);
   }
 }
 
