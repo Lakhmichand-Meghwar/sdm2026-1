@@ -1,13 +1,13 @@
 import "./style.css";
 import {
+  addClue,
+  CODE_ANSWER,
+  type GameState,
+  hasClue,
+  LOOP_DURATION,
   makeState,
   resetLoop,
-  hasClue,
-  addClue,
   switchPlayer,
-  CODE_ANSWER,
-  LOOP_DURATION,
-  type GameState,
 } from "./game.ts";
 import * as ui from "./ui.ts";
 

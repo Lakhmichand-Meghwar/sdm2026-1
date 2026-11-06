@@ -19,7 +19,7 @@ export interface GameState {
   // Per-loop state (reset each loop)
   paintClicks: number;
   keyVisible: boolean;
-  keyHolder: PlayerId | null;  // which player holds the key
+  keyHolder: PlayerId | null; // which player holds the key
   cabinetOpen: boolean;
   laptopDone: boolean;
 

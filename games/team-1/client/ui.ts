@@ -56,8 +56,7 @@ export function showWin(loops: number, timeLeft: number): void {
     2: "Two loops. The clues connected. You're out.",
     3: "Three loops — knowledge built, the year revealed, the door open.",
   };
-  el("win-msg").textContent =
-    msgs[loops] ?? `After ${loops} loops, both detectives finally break the cycle.`;
+  el("win-msg").textContent = msgs[loops] ?? `After ${loops} loops, both detectives finally break the cycle.`;
 }
 
 // ── HUD ──────────────────────────────────────────────────────────────────────
@@ -82,7 +81,7 @@ export function updateLoop(loop: number): void {
 
 export function setPlayerKey(player: PlayerId, has: boolean): void {
   const slotId = player === 1 ? "p1-slot" : "p2-slot";
-  const keyId  = player === 1 ? "p1-key"  : "p2-key";
+  const keyId = player === 1 ? "p1-key" : "p2-key";
   setClass(keyId, "hidden", !has);
   setClass(slotId, "has-item", has);
 }
@@ -294,7 +293,7 @@ export function startParticles(): void {
     vy: (Math.random() - 0.5) * 2,
     r: Math.random() * 2 + 1,
     a: Math.random() * 0.6 + 0.2,
-    hue: 30 + Math.random() * 20,  // amber tones
+    hue: 30 + Math.random() * 20, // amber tones
   }));
 
   let frame = 0;
