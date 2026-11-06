@@ -219,10 +219,6 @@ export function setOwnership(me: number, taps: Record<string, Target>): void {
 
 // ── level 1 · the office ──────────────────────────────────────────────────────
 
-export function setPaintCounter(clicks: number): void {
-  setText("paint-counter", clicks >= 4 ? "✓" : `${clicks} / 4`);
-}
-
 export function setKeyVisible(visible: boolean): void {
   setHidden("obj-key", !visible);
 }
@@ -247,7 +243,6 @@ export function setLaptopDone(done: boolean): void {
 // ── level 2 · the archive ─────────────────────────────────────────────────────
 
 export function setShelf(step: number): void {
-  setText("shelf-counter", step >= SHELF_ORDER.length ? "✓" : `${step} / ${SHELF_ORDER.length}`);
   for (let book = 0; book < 4; book++) {
     setClass(`obj-book-${book}`, "pulled", SHELF_ORDER.slice(0, step).includes(book));
   }

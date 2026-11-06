@@ -113,7 +113,6 @@ function renderRoom(state: TimeLoopState, me: number): void {
   ui.setOwnership(me, TAPS);
 
   const keyOnFloor = state.keyVisible && state.keyHolder === 0;
-  ui.setPaintCounter(state.paintClicks);
   ui.setKeyVisible(level === 1 && keyOnFloor);
   ui.setCabinetOpen(state.cabinetOpen);
   ui.setPhotoVisible(state.cabinetOpen);

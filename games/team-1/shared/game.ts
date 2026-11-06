@@ -219,7 +219,7 @@ function pushPainting(ctx: Ctx, name: string): void {
     const msgs = [
       `${name} pushes the painting. It shifts slightly.`,
       `${name} pushes the painting. It swings. Something hides behind it.`,
-      `${name} pushes the painting. Almost there. One more push.`,
+      `${name} pushes the painting. Almost there.`,
     ];
     say(ctx, "info", msgs[s.paintClicks - 1] ?? "The painting moves.");
   } else {

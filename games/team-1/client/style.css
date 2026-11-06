@@ -649,19 +649,6 @@ body {
   inset: 0;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, transparent 50%);
 }
-.paint-counter {
-  position: absolute;
-  bottom: -26px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.58rem;
-  color: var(--dim);
-  background: rgba(10, 8, 6, 0.8);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--hud-border);
-  white-space: nowrap;
-}
 
 /* ── HIDDEN KEY ──────────────────────────────────────────────────────────── */
 .r-key {
@@ -1899,19 +1886,6 @@ body {
 .a-book.pulled {
   transform: translateY(-8px);
   outline: 1px solid rgba(255, 255, 255, 0.4);
-}
-.a-counter {
-  position: absolute;
-  bottom: -26px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.58rem;
-  color: var(--dim);
-  background: rgba(10, 8, 6, 0.8);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--hud-border);
-  white-space: nowrap;
 }
 .a-card {
   left: 41%;
