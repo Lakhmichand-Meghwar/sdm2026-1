@@ -2,6 +2,7 @@
 import {
   clues,
   type EscapeAction,
+  type EscapeClue,
   type EscapeSnapshot,
   escapeRoomName,
   type Station,
@@ -41,6 +42,14 @@ const restart = element<HTMLButtonElement>("#restart");
 const inspection = element<HTMLDialogElement>("#inspection");
 const inspectionTitle = element<HTMLElement>("#inspection-title");
 const inspectionText = element<HTMLElement>("#inspection-text");
+const flipPhoto = element<HTMLButtonElement>("#flip-photo");
+const clueTitles: Record<EscapeClue, string> = {
+  note: "Admission note",
+  cabinet: "Cabinet slip",
+  photo: "Staff photograph",
+  terminal: "Terminal instructions",
+};
+let notebookKey = "";
 const evidence = element<HTMLElement>("#evidence");
 const patients = [element<HTMLElement>("#patient-1"), element<HTMLElement>("#patient-2")];
 const stationButtons = [...roomActions.querySelectorAll<HTMLButtonElement>("button[data-target]")];
@@ -78,13 +87,16 @@ function inspect(station: Station) {
   send({ type: "inspect", target: station });
   if (station !== "note" && station !== "photo" && station !== "cabinet") return;
   if (station === "cabinet" && !snapshot.hasKey && !snapshot.cabinetOpen) return;
-  evidence.dataset.kind = station;
-  inspectionTitle.textContent = {
-    note: "Admission note",
-    photo: "Staff photograph",
-    cabinet: "Cabinet slip",
-  }[station];
-  inspectionText.textContent = clues[station];
+  showEvidence(station, station === "photo");
+}
+
+function showEvidence(clue: EscapeClue, front = false) {
+  evidence.dataset.kind = clue === "photo" && !front ? "photo-back" : clue;
+  inspectionTitle.textContent = clueTitles[clue];
+  inspectionText.textContent = front
+    ? "Ward 04 staff. Someone in the photograph has your face."
+    : clues[clue];
+  flipPhoto.hidden = !front;
   if (!inspection.open) inspection.showModal();
 }
 
@@ -120,13 +132,20 @@ function render(state: EscapeSnapshot) {
   if (password.disabled) password.value = "";
   inventory.textContent = state.hasKey ? "Rusted key" : "Empty";
   if (status.textContent !== state.message) status.textContent = state.message;
-  notebook.replaceChildren(
-    ...state.clues.map((clue) => {
-      const line = document.createElement("li");
-      line.textContent = clues[clue];
-      return line;
-    }),
-  );
+  const nextNotebookKey = JSON.stringify([active, state.clues]);
+  if (nextNotebookKey === notebookKey) return;
+  notebookKey = nextNotebookKey;
+  notebook.replaceChildren();
+  for (const clue of state.clues) {
+    const line = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = clueTitles[clue];
+    button.disabled = !active;
+    button.addEventListener("click", () => showEvidence(clue));
+    line.append(button);
+    notebook.append(line);
+  }
   if (!state.clues.length) {
     const line = document.createElement("li");
     line.textContent = "Nothing written yet.";
@@ -176,6 +195,11 @@ roomCode.addEventListener("focus", () => roomCode.select());
 showArea("ward");
 wardView.addEventListener("click", () => selectStation("note"));
 securityView.addEventListener("click", () => selectStation("photo"));
+flipPhoto.addEventListener("click", () => {
+  send({ type: "flip-photo" });
+  showEvidence("photo");
+  element<HTMLButtonElement>("#close-inspection").focus();
+});
 restart.addEventListener("click", () => send({ type: "restart" }));
 for (const [index, button] of stationButtons.entries()) {
   const station = stationOrder[index];

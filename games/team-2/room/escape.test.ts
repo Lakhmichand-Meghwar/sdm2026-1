@@ -23,6 +23,19 @@ describe("Ward 04 attempts", () => {
     expect(game.state.patients.map(({ station }) => station)).toEqual([null, null]);
   });
 
+  it("shares the photograph date only after turning it over at the station", () => {
+    const game = new EscapeRun();
+    game.join("first");
+    game.join("second");
+    game.act("first", { type: "inspect", target: "photo" });
+    expect(game.state.clues).not.toContain("photo");
+    game.act("second", { type: "flip-photo" });
+    expect(game.state.clues).not.toContain("photo");
+    game.act("first", { type: "flip-photo" });
+    game.act("first", { type: "flip-photo" });
+    expect(game.state.clues).toEqual(["photo"]);
+  });
+
   it("requires two different patients to activate the exit", () => {
     const game = new EscapeRun();
     game.join("first");

@@ -16,6 +16,7 @@ export type Station = (typeof stations)[number];
 export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("move"), station: z.enum(stations) }),
   z.object({ type: z.literal("restart") }),
+  z.object({ type: z.literal("flip-photo") }),
   z.object({ type: z.literal("inspect"), target: z.enum(targets) }),
   z.object({ type: z.literal("password"), code: z.string().regex(/^\d{4}$/) }),
 ]);
