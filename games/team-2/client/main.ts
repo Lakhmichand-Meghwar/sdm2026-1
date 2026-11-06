@@ -31,6 +31,7 @@ const round = element<HTMLElement>("#round");
 const notebook = element<HTMLElement>("#notebook");
 const inventory = element<HTMLElement>("#inventory");
 const terminal = element<HTMLFormElement>("#terminal");
+const relayStatus = element<HTMLElement>("#relay-status");
 const password = element<HTMLInputElement>("#password");
 const roomCode = element<HTMLInputElement>("#room-code");
 const roomActions = element<HTMLFieldSetElement>("#room-actions");
@@ -81,7 +82,7 @@ function inspect(station: Station) {
     else
       status.textContent = snapshot.terminalUnlocked
         ? "The terminal has unlocked the exit."
-        : "The terminal is unpowered.";
+        : "Ask your partner to stay at the open medicine cabinet to power the terminal.";
     return;
   }
   send({ type: "inspect", target: station });
@@ -127,7 +128,18 @@ function render(state: EscapeSnapshot) {
   game.dataset.danger = String(active && state.seconds <= 10);
   game.dataset.phase = state.phase;
   roomActions.disabled = !active;
-  password.disabled = !active || !state.cabinetOpen || state.terminalUnlocked;
+  const relay = state.cabinetOpen && state.patients.find((patient) => patient.station === "cabinet");
+  const partnerAtRelay =
+    state.cabinetOpen &&
+    state.patients.some((patient) => patient.id !== room?.sessionId && patient.station === "cabinet");
+  relayStatus.textContent = state.terminalUnlocked
+    ? "Exit contacts unlocked."
+    : partnerAtRelay
+      ? "Relay live. Enter the access code."
+      : relay
+        ? "You are powering the terminal. Stay here while your partner enters the code."
+        : "Relay offline. One player must stay at the open cabinet.";
+  password.disabled = !active || !partnerAtRelay || state.terminalUnlocked;
   submitPassword.disabled = password.disabled;
   if (password.disabled) password.value = "";
   inventory.textContent = state.hasKey ? "Rusted key" : "Empty";

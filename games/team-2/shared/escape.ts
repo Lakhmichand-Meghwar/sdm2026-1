@@ -5,7 +5,8 @@ export const runSeconds = 180;
 export const tickMs = 250;
 export const clues = {
   note: "BLUE - 4. The blue painting remembers every knock.",
-  cabinet: "Find the year on the photograph. The terminal remembers the dead.",
+  cabinet:
+    "Find the year on the photograph. One patient must stay at the cabinet relay while the other enters the year at the terminal.",
   photo: "Ward 04 staff photograph, dated 1973.",
   terminal: "Two people must hold the exit contacts within four seconds of each other.",
 } as const;

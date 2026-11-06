@@ -42,11 +42,35 @@ describe("Ward 04 attempts", () => {
     game.join("second");
     for (let knock = 0; knock < 4; knock += 1) game.act("first", { type: "inspect", target: "painting" });
     game.act("second", { type: "inspect", target: "cabinet" });
-    game.act("second", { type: "password", code: "1973" });
+    game.act("first", { type: "password", code: "1973" });
     game.act("first", { type: "inspect", target: "exit" });
     game.act("first", { type: "inspect", target: "exit" });
     expect(game.state.phase).toBe("running");
     game.act("second", { type: "inspect", target: "exit" });
     expect(game.state.phase).toBe("escaped");
+  });
+
+  it("only accepts the code while another connected patient stays at the relay", () => {
+    const game = new EscapeRun();
+    game.join("first");
+    game.join("second");
+    for (let knock = 0; knock < 4; knock += 1) game.act("first", { type: "inspect", target: "painting" });
+    game.act("first", { type: "inspect", target: "cabinet" });
+
+    game.act("first", { type: "password", code: "1973" });
+    expect(game.state.terminalUnlocked).toBe(false);
+    game.act("first", { type: "move", station: "cabinet" });
+    game.act("first", { type: "move", station: "photo" });
+    game.act("second", { type: "password", code: "1973" });
+    expect(game.state.terminalUnlocked).toBe(false);
+    game.act("first", { type: "move", station: "cabinet" });
+    game.leave("first");
+    game.act("second", { type: "password", code: "1973" });
+    expect(game.state.terminalUnlocked).toBe(false);
+
+    game.join("replacement");
+    game.act("replacement", { type: "move", station: "cabinet" });
+    game.act("second", { type: "password", code: "1973" });
+    expect(game.state.terminalUnlocked).toBe(true);
   });
 });

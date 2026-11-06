@@ -117,7 +117,11 @@ export class EscapeRun {
     if (action.type === "password") {
       patient.station = "terminal";
       if (!this.state.cabinetOpen) this.state.message = "The terminal is unpowered. Check the cabinet.";
-      else if (action.code !== "1973") this.state.message = "ACCESS DENIED. Something knocks back.";
+      else if (
+        !this.state.patients.some((partner) => partner.id !== sessionId && partner.station === "cabinet")
+      ) {
+        this.state.message = "No power. Your partner must stay at the cabinet relay.";
+      } else if (action.code !== "1973") this.state.message = "ACCESS DENIED. Something knocks back.";
       else {
         this.state.terminalUnlocked = true;
         this.remember("terminal");
@@ -149,7 +153,7 @@ export class EscapeRun {
         this.state.hasKey = false;
         this.state.cabinetOpen = true;
         this.remember("cabinet");
-        this.state.message = "You flip the power switch and find a note inside.";
+        this.state.message = "You find a note. Stay at the cabinet to power the terminal for your partner.";
         break;
       case "exit":
         if (!this.state.terminalUnlocked) this.state.message = "Two dead contacts. The exit is sealed.";
