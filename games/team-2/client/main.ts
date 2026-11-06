@@ -1,5 +1,11 @@
 ﻿import { Client, type Room } from "@colyseus/sdk";
-import { clues, type EscapeAction, type EscapeSnapshot, escapeRoomName } from "../shared/escape.ts";
+import {
+  clues,
+  type EscapeAction,
+  type EscapeSnapshot,
+  escapeRoomName,
+  type Station,
+} from "../shared/escape.ts";
 import "./style.css";
 
 const endpoint =
@@ -28,13 +34,84 @@ const password = element<HTMLInputElement>("#password");
 const roomCode = element<HTMLInputElement>("#room-code");
 const roomActions = element<HTMLFieldSetElement>("#room-actions");
 const submitPassword = element<HTMLButtonElement>("#submit-password");
+const scene = element<HTMLElement>("#scene");
+const wardView = element<HTMLButtonElement>("#ward-view");
+const securityView = element<HTMLButtonElement>("#security-view");
+const restart = element<HTMLButtonElement>("#restart");
+const inspection = element<HTMLDialogElement>("#inspection");
+const inspectionTitle = element<HTMLElement>("#inspection-title");
+const inspectionText = element<HTMLElement>("#inspection-text");
+const evidence = element<HTMLElement>("#evidence");
+const patients = [element<HTMLElement>("#patient-1"), element<HTMLElement>("#patient-2")];
+const stationButtons = [...roomActions.querySelectorAll<HTMLButtonElement>("button[data-target]")];
+const stationOrder: Station[] = ["note", "painting", "cabinet", "photo", "terminal", "exit"];
+let selected: Station = "note";
+let snapshot: EscapeSnapshot | undefined;
 let room: Room | undefined;
 
+function showArea(area: string) {
+  scene.dataset.view = area;
+  wardView.setAttribute("aria-pressed", String(area === "ward"));
+  securityView.setAttribute("aria-pressed", String(area === "security"));
+  for (const button of stationButtons) button.hidden = button.dataset.area !== area;
+}
+
+function selectStation(station: Station) {
+  selected = station;
+  const area = stationOrder.indexOf(station) < 3 ? "ward" : "security";
+  showArea(area);
+  for (const button of stationButtons) button.dataset.selected = String(button.dataset.target === station);
+  send({ type: "move", station });
+}
+
+function inspect(station: Station) {
+  if (snapshot?.phase !== "running") return;
+  selectStation(station);
+  if (station === "terminal") {
+    if (!password.disabled) password.focus();
+    else
+      status.textContent = snapshot.terminalUnlocked
+        ? "The terminal has unlocked the exit."
+        : "The terminal is unpowered.";
+    return;
+  }
+  send({ type: "inspect", target: station });
+  if (station !== "note" && station !== "photo" && station !== "cabinet") return;
+  if (station === "cabinet" && !snapshot.hasKey && !snapshot.cabinetOpen) return;
+  evidence.dataset.kind = station;
+  inspectionTitle.textContent = {
+    note: "Admission note",
+    photo: "Staff photograph",
+    cabinet: "Cabinet slip",
+  }[station];
+  inspectionText.textContent = clues[station];
+  if (!inspection.open) inspection.showModal();
+}
+
+function renderPatients(state: EscapeSnapshot) {
+  for (const [index, avatar] of patients.entries()) {
+    const patient = state.patients.find((entry) => entry.slot === index + 1);
+    avatar.hidden = !patient;
+    avatar.dataset.station = patient?.station ?? "spawn";
+    avatar.dataset.local = String(patient?.id === room?.sessionId);
+  }
+}
+
 function render(state: EscapeSnapshot) {
+  if (snapshot && snapshot.attempt !== state.attempt) {
+    selected = "note";
+    showArea("ward");
+    for (const button of stationButtons) button.dataset.selected = "false";
+  }
+  snapshot = state;
+  renderPatients(state);
   const active = state.phase === "running";
+  restart.hidden = state.phase !== "failed" && state.phase !== "escaped";
+  restart.disabled = state.players !== 2;
+  if (!active && inspection.open) inspection.close();
   const seconds = String(state.seconds % 60).padStart(2, "0");
   timer.textContent = state.phase === "escaped" ? "FREE" : `0${Math.floor(state.seconds / 60)}:${seconds}`;
-  round.textContent = `Loop ${state.loop} · ${state.players}/2 patients`;
+  round.textContent = `Attempt ${state.attempt} · ${state.players}/2 patients`;
   game.dataset.danger = String(active && state.seconds <= 10);
   game.dataset.phase = state.phase;
   roomActions.disabled = !active;
@@ -67,6 +144,8 @@ async function connect(roomId?: string) {
     connected.onMessage("snapshot", render);
     connected.onLeave(() => {
       room = undefined;
+      snapshot = undefined;
+      if (inspection.open) inspection.close();
       game.hidden = true;
       lobby.hidden = false;
       status.textContent = "Connection lost. Re-enter the room code to return.";
@@ -94,12 +173,37 @@ lobby.addEventListener("submit", (event) => {
   if (code.value.trim()) void connect(code.value.trim());
 });
 roomCode.addEventListener("focus", () => roomCode.select());
-for (const button of roomActions.querySelectorAll<HTMLButtonElement>("button[data-target]")) {
-  button.addEventListener("click", () => {
-    const target = button.dataset.target as Extract<EscapeAction, { type: "inspect" }>["target"];
-    send({ type: "inspect", target });
-  });
+showArea("ward");
+wardView.addEventListener("click", () => selectStation("note"));
+securityView.addEventListener("click", () => selectStation("photo"));
+restart.addEventListener("click", () => send({ type: "restart" }));
+for (const [index, button] of stationButtons.entries()) {
+  const station = stationOrder[index];
+  if (station) button.addEventListener("click", () => inspect(station));
 }
+document.addEventListener("keydown", (event) => {
+  if (snapshot?.phase !== "running" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+  if (inspection.open) {
+    if (event.key.toLowerCase() === "e") inspection.close();
+    return;
+  }
+  if (event.key.toLowerCase() === "e") {
+    event.preventDefault();
+    inspect(selected);
+    return;
+  }
+  let index = /^[1-6]$/.test(event.key) ? Number(event.key) - 1 : -1;
+  if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    index = (stationOrder.indexOf(selected) + step + stationOrder.length) % stationOrder.length;
+  }
+  const station = stationOrder[index];
+  if (station) {
+    event.preventDefault();
+    selectStation(station);
+  }
+});
 terminal.addEventListener("submit", (event) => {
   event.preventDefault();
   send({ type: "password", code: password.value });

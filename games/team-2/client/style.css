@@ -1,4 +1,6 @@
-﻿:root {
+@import "tailwindcss";
+
+:root {
   font-family: system-ui, sans-serif;
   color-scheme: dark;
   color: #e9ddd7;
@@ -18,11 +20,6 @@ body {
   background: radial-gradient(ellipse at top, #3b2025, transparent 65%);
 }
 
-main {
-  max-width: 56rem;
-  margin: auto;
-  padding: clamp(1rem, 4vw, 3rem);
-}
 header {
   border-bottom: 1px solid #6e4146;
   margin-bottom: 1.5rem;
@@ -54,8 +51,7 @@ button span,
   text-transform: uppercase;
 }
 
-.panel,
-fieldset {
+.panel {
   border: 1px solid #6e4146;
   border-radius: 0.25rem;
   background: #1b1318;
@@ -124,28 +120,8 @@ button:disabled {
   color: #b7ddaf;
 }
 
-fieldset,
-.details {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
-  gap: 0.65rem;
-}
-fieldset button {
-  text-align: left;
-  min-height: 4rem;
-}
-fieldset button span {
-  display: block;
-  margin-bottom: 0.3rem;
-}
-[data-target="painting"] {
-  background: #24345b;
-  border-color: #7e96c6;
-}
-[data-target="painting"]:hover:not(:disabled) {
-  background: #364b77;
-}
 #notebook {
+  list-style: disc;
   padding-left: 1.3rem;
 }
 #notebook li {
@@ -153,4 +129,222 @@ fieldset button span {
 }
 .transmission {
   border-left: 4px solid #c78079;
+}
+
+.scene {
+  aspect-ratio: 3 / 2;
+  background: #090c14;
+  isolation: isolate;
+}
+
+.scene-map {
+  position: absolute;
+  inset: 0;
+  background: url("./ward.jpg") center / 100% 100%;
+  transform: scale(1.17);
+  transform-origin: left 38%;
+  transition:
+    transform 280ms ease,
+    transform-origin 280ms ease;
+}
+
+.scene[data-view="security"] .scene-map {
+  transform-origin: right 38%;
+}
+
+.station {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  min-height: 2rem;
+  padding: 0.25rem 0.45rem;
+  font-size: clamp(0.64rem, 1.3vw, 0.92rem);
+  white-space: nowrap;
+  background: #0b101be8;
+  border-color: #82929e;
+}
+
+.station[data-selected="true"],
+.station:hover:not(:disabled),
+[aria-pressed="true"] {
+  border-color: #a6edf4;
+  background: #193849;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0 0.25em;
+  color: #b2edf5;
+  border: 1px solid #647e8b;
+  border-radius: 0.2em;
+  font-family: monospace;
+}
+
+[data-target="note"] {
+  --x: 33%;
+  --y: 47%;
+}
+[data-target="painting"] {
+  --x: 33%;
+  --y: 28%;
+}
+[data-target="cabinet"] {
+  --x: 54%;
+  --y: 35%;
+}
+[data-target="photo"] {
+  --x: 68%;
+  --y: 28%;
+}
+[data-target="terminal"] {
+  --x: 68%;
+  --y: 45%;
+}
+[data-target="exit"] {
+  --x: 83%;
+  --y: 50%;
+}
+
+.patient {
+  --x: 47%;
+  --y: 72%;
+  --scrubs: #5abecf;
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-55%, -100%);
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  color: var(--scrubs);
+  filter: drop-shadow(0 0.2rem 0.15rem #000);
+  transition:
+    left 260ms ease,
+    top 260ms ease;
+}
+
+.patient[hidden] {
+  display: none;
+}
+
+#patient-2 {
+  --scrubs: #ffb876;
+  transform: translate(20%, -90%);
+}
+
+#patient-2[data-station="spawn"] {
+  --x: 53%;
+}
+
+.patient span {
+  font: 700 0.75rem monospace;
+  background: #0b101be8;
+  padding: 0.15rem 0.3rem;
+  border-radius: 0.2rem;
+}
+
+.patient[data-local="true"] span::after {
+  content: " · YOU";
+}
+.patient[data-station="note"] {
+  --x: 35%;
+  --y: 65%;
+}
+.patient[data-station="painting"] {
+  --x: 42%;
+  --y: 60%;
+}
+.patient[data-station="cabinet"] {
+  --x: 55%;
+  --y: 57%;
+}
+.patient[data-station="photo"] {
+  --x: 63%;
+  --y: 59%;
+}
+.patient[data-station="terminal"] {
+  --x: 69%;
+  --y: 65%;
+}
+.patient[data-station="exit"] {
+  --x: 82%;
+  --y: 65%;
+}
+
+.patient i {
+  display: block;
+  position: relative;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.65rem;
+  margin-bottom: 0.3rem;
+  background: var(--scrubs);
+  border: 2px solid #101420;
+  box-shadow:
+    -0.24rem 0.55rem 0 -0.23rem #d0c5bb,
+    0.24rem 0.55rem 0 -0.23rem #d0c5bb;
+}
+
+.patient i::before {
+  content: "";
+  position: absolute;
+  inset: -0.75rem 0.05rem auto;
+  height: 0.7rem;
+  background: #dcb099;
+  border: 2px solid #101420;
+  border-top: 0.22rem solid #42313b;
+}
+
+.inspection {
+  margin: auto;
+  width: min(30rem, calc(100% - 2rem));
+  padding: 1rem;
+  border: 1px solid #bd8180;
+  border-radius: 0.6rem;
+  background: #221a21;
+}
+
+.inspection::backdrop {
+  background: #08090dd6;
+}
+
+.evidence {
+  margin-top: 0.8rem;
+  padding: 1.4rem;
+  border: 4px double #72574e;
+  background: #ebd5aa;
+  color: #322525;
+  font:
+    700 1.1rem / 1.55 Georgia,
+    serif;
+  box-shadow: inset 0 0 2rem #8d59434a;
+}
+
+.evidence[data-kind="note"] {
+  color: #163e72;
+}
+
+.evidence[data-kind="photo"]::before {
+  content: "";
+  display: block;
+  aspect-ratio: 1.5;
+  margin-bottom: 0.8rem;
+  border: 0.3rem solid #45382d;
+  background: url("./ward.jpg") 71% 26% / 800% 800%;
+}
+
+#game[data-phase="failed"] .scene-map {
+  filter: grayscale(0.9) brightness(0.55);
+}
+#game[data-phase="failed"] #timer {
+  color: #ff7878;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-map,
+  .patient {
+    transition: none;
+  }
 }
