@@ -1,5 +1,5 @@
 {
-  "extends": "../tooling/tsconfig.base.json",
+  "extends": "@sdm/tooling/tsconfig.base.json",
   "compilerOptions": { "lib": ["ES2022", "DOM", "DOM.Iterable"], "types": ["vite/client", "node"] },
   "include": ["client", "room", "shared", "config", "server.ts", "vite.config.ts"]
 }
