@@ -1,7 +1,7 @@
 ﻿import { z } from "zod";
 
 export const escapeRoomName = "escape";
-export const loopSeconds = 60;
+export const runSeconds = 180;
 export const tickMs = 250;
 export const clues = {
   note: "BLUE - 4. The blue painting remembers every knock.",
@@ -10,7 +10,12 @@ export const clues = {
   terminal: "Two people must hold the exit contacts within four seconds of each other.",
 } as const;
 export const targets = ["note", "painting", "cabinet", "photo", "exit"] as const;
+export const stations = [...targets, "terminal"] as const;
+export type Station = (typeof stations)[number];
+
 export const actionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("move"), station: z.enum(stations) }),
+  z.object({ type: z.literal("restart") }),
   z.object({ type: z.literal("inspect"), target: z.enum(targets) }),
   z.object({ type: z.literal("password"), code: z.string().regex(/^\d{4}$/) }),
 ]);
@@ -18,9 +23,10 @@ export type EscapeAction = z.infer<typeof actionSchema>;
 export type EscapeClue = keyof typeof clues;
 
 export interface EscapeSnapshot {
-  phase: "waiting" | "running" | "escaped";
+  phase: "waiting" | "running" | "escaped" | "failed";
   players: number;
-  loop: number;
+  attempt: number;
+  patients: { id: string; slot: number; station: Station | null }[];
   seconds: number;
   clues: EscapeClue[];
   hasKey: boolean;

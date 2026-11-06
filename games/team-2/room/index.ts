@@ -1,27 +1,28 @@
-﻿import { type Client, Room } from "colyseus";
+import { type Client, Room } from "colyseus";
 import {
   actionSchema,
   type EscapeAction,
   type EscapeClue,
   type EscapeSnapshot,
   escapeRoomName,
-  loopSeconds,
+  runSeconds,
   tickMs,
 } from "../shared/escape.ts";
 
 const ticksPerSecond = 1000 / tickMs;
-const loopTicks = loopSeconds * ticksPerSecond;
+const runTicks = runSeconds * ticksPerSecond;
 
-class EscapeLoop {
+export class EscapeRun {
   private readonly notebook = new Set<EscapeClue>();
-  private ticksLeft = loopTicks;
+  private ticksLeft = runTicks;
   private contactTicks = 0;
   private knocks = 0;
   readonly state: EscapeSnapshot = {
     phase: "waiting",
     players: 0,
-    loop: 1,
-    seconds: loopSeconds,
+    attempt: 1,
+    patients: [],
+    seconds: runSeconds,
     clues: [],
     hasKey: false,
     cabinetOpen: false,
@@ -30,8 +31,10 @@ class EscapeLoop {
     message: "The ward is waiting for two patients.",
   };
 
-  join() {
-    this.state.players += 1;
+  join(sessionId: string) {
+    const slot = this.state.patients.some((patient) => patient.slot === 1) ? 2 : 1;
+    this.state.patients.push({ id: sessionId, slot, station: null });
+    this.state.players = this.state.patients.length;
     if (this.state.players === 2 && this.state.phase === "waiting") {
       this.state.phase = "running";
       this.state.message = "The door locks. Something behind the wall starts counting.";
@@ -39,11 +42,11 @@ class EscapeLoop {
   }
 
   leave(sessionId: string) {
-    this.state.players -= 1;
+    this.state.patients = this.state.patients.filter((patient) => patient.id !== sessionId);
+    this.state.players = this.state.patients.length;
     if (this.state.exitContact === sessionId) this.state.exitContact = null;
     if (this.state.phase === "running") {
-      this.state.phase = "waiting";
-      this.state.message = "Your partner vanished. The clock waits for another patient.";
+      this.state.message = "Your partner vanished. The clock is still running.";
     }
   }
 
@@ -61,14 +64,9 @@ class EscapeLoop {
   private updateTimer() {
     this.ticksLeft -= 1;
     if (this.ticksLeft === 0) {
-      this.ticksLeft = loopTicks;
-      this.knocks = 0;
-      this.state.loop += 1;
-      this.state.hasKey = false;
-      this.state.cabinetOpen = false;
-      this.state.terminalUnlocked = false;
+      this.state.phase = "failed";
       this.state.exitContact = null;
-      this.state.message = "The ward has reset. Your notebook is still warm.";
+      this.state.message = "The ward has sealed. Restart to make another attempt.";
     }
     const seconds = Math.ceil(this.ticksLeft / ticksPerSecond);
     if (seconds === this.state.seconds) return false;
@@ -82,8 +80,36 @@ class EscapeLoop {
   }
 
   act(sessionId: string, action: EscapeAction) {
+    if (action.type === "restart") {
+      if (this.state.players !== 2 || (this.state.phase !== "failed" && this.state.phase !== "escaped"))
+        return;
+      this.notebook.clear();
+      this.knocks = 0;
+      this.contactTicks = 0;
+      this.ticksLeft = runTicks;
+      Object.assign(this.state, {
+        phase: "running",
+        attempt: this.state.attempt + 1,
+        seconds: runSeconds,
+        clues: [],
+        hasKey: false,
+        cabinetOpen: false,
+        terminalUnlocked: false,
+        exitContact: null,
+        message: "The ward opens its eyes again.",
+      });
+      for (const patient of this.state.patients) patient.station = null;
+      return;
+    }
     if (this.state.phase !== "running") return;
+    const patient = this.state.patients.find((entry) => entry.id === sessionId);
+    if (!patient) return;
+    if (action.type === "move") {
+      patient.station = action.station;
+      return;
+    }
     if (action.type === "password") {
+      patient.station = "terminal";
       if (!this.state.cabinetOpen) this.state.message = "The terminal is unpowered. Check the cabinet.";
       else if (action.code !== "1973") this.state.message = "ACCESS DENIED. Something knocks back.";
       else {
@@ -93,6 +119,7 @@ class EscapeLoop {
       }
       return;
     }
+    patient.station = action.target;
     switch (action.target) {
       case "note":
         this.remember("note");
@@ -137,7 +164,7 @@ class EscapeLoop {
 
 class EscapeRoom extends Room {
   override maxClients = 2;
-  private readonly loop = new EscapeLoop();
+  private readonly loop = new EscapeRun();
 
   override onCreate() {
     this.onMessage("sync", (client) => client.send("snapshot", this.loop.state));
@@ -152,8 +179,8 @@ class EscapeRoom extends Room {
     }, tickMs);
   }
 
-  override onJoin() {
-    this.loop.join();
+  override onJoin(client: Client) {
+    this.loop.join(client.sessionId);
     this.broadcast("snapshot", this.loop.state);
   }
 
