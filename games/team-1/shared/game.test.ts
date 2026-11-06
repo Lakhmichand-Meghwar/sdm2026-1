@@ -391,3 +391,128 @@ describe("whole game", () => {
     expect(runReplay(game, replay).stateHash).toBe(replay.final?.stateHash);
   });
 });
+
+describe("playing with a bot", () => {
+  function withBot(): Room {
+    const room = makeRoom();
+    room.sim.join("a", { name: "Ada", bot: true });
+    room.tick();
+    return room;
+  }
+
+  /** Ticks until `done`, so the bot has time to act. Fails if it never happens. */
+  function until(room: Room, done: () => boolean, max = 1500): void {
+    for (let i = 0; i < max && !done(); i++) room.tick();
+    expect(done()).toBe(true);
+  }
+
+  /** Only the human's own jobs: the bot does the rest. */
+  function soloGame(room: Room): void {
+    const s = room.state;
+    room.act("a", { type: "ready" });
+    until(room, () => s.phase === "playing");
+    for (let i = 0; i < 4; i++) room.tap("a", "painting");
+    room.tap("a", "key");
+    until(room, () => s.cabinetOpen);
+    room.tap("a", "photo");
+    until(room, () => s.laptopDone);
+    room.tap("a", "door1");
+
+    expect(s.level).toBe(2);
+    room.act("a", { type: "ready" });
+    until(room, () => s.phase === "playing");
+    room.tap("a", "card");
+    until(room, () => s.keyVisible);
+    room.tap("a", "key2");
+    until(room, () => s.archiveCabinetOpen);
+    room.tap("a", "folder");
+    room.tap("a", "door2");
+    room.code("a", "archive", "17");
+    until(room, () => s.archiveDone);
+    room.tap("a", "door2");
+
+    expect(s.level).toBe(3);
+    room.act("a", { type: "ready" });
+    until(room, () => s.phase === "playing");
+    room.tap("a", "sw0");
+    until(room, () => s.powered);
+    room.tap("a", "terminal");
+    until(room, () => s.safeOpen);
+    room.tap("a", "door3");
+  }
+
+  it("adds a bot as the second detective and starts straight away", () => {
+    const room = withBot();
+    expect(room.state.players.size).toBe(2);
+    expect(room.state.players.get("bot")?.bot).toBe(true);
+    expect(room.state.players.get("bot")?.slot).toBe(2);
+    expect(room.state.phase).toBe("briefing");
+  });
+
+  it("gets ready by itself, but the clock only starts once the person is ready", () => {
+    const room = withBot();
+    room.tick(100);
+    expect(room.state.phase).toBe("briefing");
+    room.act("a", { type: "ready" });
+    expect(room.state.phase).toBe("playing");
+  });
+
+  it("runs the clock without a second connected person", () => {
+    const room = withBot();
+    room.act("a", { type: "ready" });
+    until(room, () => room.state.phase === "playing");
+    const before = room.state.timeLeft;
+    room.tick(game.config.tickRate * 2);
+    expect(room.state.timeLeft).toBe(before - 2);
+  });
+
+  it("stops the clock while the person is away", () => {
+    const room = withBot();
+    room.act("a", { type: "ready" });
+    until(room, () => room.state.phase === "playing");
+    room.sim.drop("a");
+    const before = room.state.timeLeft;
+    room.tick(game.config.tickRate * 4);
+    expect(room.state.timeLeft).toBe(before);
+  });
+
+  it("waits for the person to do their part", () => {
+    const room = withBot();
+    room.act("a", { type: "ready" });
+    room.tick(game.config.tickRate * 30);
+    expect(room.journal("b")).toContain("blue4");
+    expect(room.state.cabinetOpen).toBe(false);
+    expect(room.state.laptopDone).toBe(false);
+  });
+
+  it("tells the person what it reads", () => {
+    const room = withBot();
+    room.act("a", { type: "ready" });
+    until(room, () => room.journal("a").includes("blue4"));
+  });
+
+  it("can be played and won alone", () => {
+    const room = withBot();
+    soloGame(room);
+    expect(room.state.phase).toBe("won");
+    expect(room.state.totalLoops).toBe(3);
+  });
+
+  it("replays to the same final state", () => {
+    const room = withBot();
+    soloGame(room);
+    const replay = room.sim.snapshot();
+    expect(runReplay(game, replay).stateHash).toBe(replay.final?.stateHash);
+  });
+
+  it("lets a friend take over the bot's seat and keep its journal", () => {
+    const room = withBot();
+    room.act("a", { type: "ready" });
+    until(room, () => room.journal("b").includes("blue4"));
+    room.sim.join("b", { name: "Bo" });
+    room.tick();
+    expect(room.state.players.has("bot")).toBe(false);
+    expect(room.state.players.get("b")?.slot).toBe(2);
+    expect(room.journal("b")).toContain("blue4");
+  });
+});

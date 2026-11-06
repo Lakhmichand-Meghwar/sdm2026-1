@@ -80,7 +80,7 @@ export function setLobbyError(text: string): void {
 }
 
 export function setLobbyBusy(busy: boolean): void {
-  for (const id of ["lobby-create", "lobby-join"]) el<HTMLButtonElement>(id).disabled = busy;
+  for (const id of ["lobby-create", "lobby-bot", "lobby-join"]) el<HTMLButtonElement>(id).disabled = busy;
 }
 
 export function setWait(code: string, link: string): void {

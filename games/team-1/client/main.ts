@@ -85,8 +85,8 @@ function connect(joined: Room<TimeLoopState>): void {
   if (joined.state?.phase) view.render(joined.state, joined.sessionId);
 }
 
-async function createRoom(): Promise<void> {
-  connect(await client.create<TimeLoopState>(ROOM_NAME, { private: true, name: chosenName() }));
+async function createRoom(bot: boolean): Promise<void> {
+  connect(await client.create<TimeLoopState>(ROOM_NAME, { private: true, name: chosenName(), bot }));
 }
 
 async function joinByCode(raw: string): Promise<void> {
@@ -213,7 +213,8 @@ document.addEventListener("DOMContentLoaded", () => {
   bind("intro-next", nextIntro);
   bind("intro-skip", showLobby);
 
-  bind("lobby-create", () => void lobbyAction(createRoom));
+  bind("lobby-create", () => void lobbyAction(() => createRoom(false)));
+  bind("lobby-bot", () => void lobbyAction(() => createRoom(true)));
   bind("lobby-join", () => void lobbyAction(() => joinByCode(ui.getLobbyCode())));
   bindEnter("lobby-code", () => void lobbyAction(() => joinByCode(ui.getLobbyCode())));
   bind("wait-copy", () => void copyInvite());

@@ -74,9 +74,9 @@ function handleEvents(state: TimeLoopState, me: number): void {
   for (const event of fresh) showEvent(event, me);
 }
 
-function playerInSlot(state: TimeLoopState, slot: 1 | 2): { id: string; name: string } | null {
+function playerInSlot(state: TimeLoopState, slot: 1 | 2): { id: string; name: string; bot: boolean } | null {
   for (const [id, player] of state.players.entries()) {
-    if (player.slot === slot) return { id, name: player.name };
+    if (player.slot === slot) return { id, name: player.name, bot: player.bot };
   }
   return null;
 }
@@ -87,7 +87,7 @@ function renderCards(state: TimeLoopState, sessionId: string): void {
     const connected = entry ? state.seats.get(entry.id)?.connected !== false : false;
     ui.setPlayerCard(slot, {
       name: entry?.name ?? `Player ${slot}`,
-      status: entry ? (connected ? "Online" : "Away") : "Waiting to join",
+      status: entry?.bot ? "Bot partner" : entry ? (connected ? "Online" : "Away") : "Waiting to join",
       you: entry?.id === sessionId,
       holdsKey: state.keyHolder === slot,
     });
