@@ -1,18 +1,64 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SDM 2026 - Team 2</title>
-    <style>
-      html, body { margin: 0; height: 100%; background: #0b0f14; color: #d6dde4; font: 14px/1.5 ui-monospace, Menlo, monospace; }
-      #app { padding: 24px; }
-      .ok { color: #5cff7a; }
-      .bad { color: #ff6a55; }
-    </style>
+    <meta name="theme-color" content="#100d10" />
+    <title>Ward 04 | Time Loop Escape</title>
   </head>
   <body>
-    <div id="app">Connecting…</div>
+    <main>
+      <header>
+        <p class="eyebrow">Patient transfer record / 04</p>
+        <h1>Ward 04</h1>
+        <p>Two patients. One minute. The room remembers nothing.</p>
+      </header>
+
+      <form id="lobby" class="panel">
+        <h2>Admission</h2>
+        <p>Create a room and share its code with the other player, or enter their code below.</p>
+        <button id="create" type="button">Create room</button>
+        <label for="code">Room code</label>
+        <div class="inline">
+          <input id="code" required autocomplete="off" maxlength="64" spellcheck="false" />
+          <button id="join" type="submit">Join room</button>
+        </div>
+      </form>
+
+      <section id="game" hidden>
+        <div class="panel instruments">
+          <div><div id="timer" role="timer" aria-label="Time remaining">01:00</div><div id="round"></div></div>
+          <label>Share this room code <input id="room-code" readonly /></label>
+        </div>
+
+        <fieldset id="room-actions" disabled>
+          <legend>Inspect the ward</legend>
+          <button type="button" data-target="note"><span>01 / Paper</span>Admission note</button>
+          <button type="button" data-target="painting"><span>02 / Wall</span>Blue painting</button>
+          <button type="button" data-target="cabinet"><span>03 / Storage</span>Medicine cabinet</button>
+          <button type="button" data-target="photo"><span>04 / Evidence</span>Staff photograph</button>
+          <button type="button" data-target="exit"><span>05 / Security</span>Touch exit contact</button>
+        </fieldset>
+
+        <div class="details">
+          <form id="terminal" class="panel">
+            <h2>Security terminal</h2>
+            <label for="password">Four-digit access code</label>
+            <div class="inline">
+              <input id="password" required disabled inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" />
+              <button id="submit-password" type="submit" disabled>Enter</button>
+            </div>
+          </form>
+          <aside class="panel">
+            <h2>Shared notebook</h2>
+            <ul id="notebook"></ul>
+            <p>Inventory: <strong id="inventory">Empty</strong></p>
+          </aside>
+        </div>
+      </section>
+
+      <p id="status" role="status" class="panel transmission">Waiting for admission.</p>
+    </main>
     <script type="module" src="/client/main.ts"></script>
   </body>
 </html>

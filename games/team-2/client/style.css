@@ -1,0 +1,156 @@
+﻿:root {
+  font-family: system-ui, sans-serif;
+  color-scheme: dark;
+  color: #e9ddd7;
+  background: #100d10;
+}
+
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at top, #3b2025, transparent 65%);
+}
+
+main {
+  max-width: 56rem;
+  margin: auto;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+header {
+  border-bottom: 1px solid #6e4146;
+  margin-bottom: 1.5rem;
+}
+h1 {
+  font:
+    700 clamp(3.4rem, 12vw, 7rem) / 0.9 Georgia,
+    serif;
+  margin: 0;
+}
+h2,
+legend {
+  font:
+    700 1.15rem Georgia,
+    serif;
+  margin: 0 0 0.65rem;
+}
+p {
+  line-height: 1.5;
+}
+.eyebrow,
+button span,
+#round {
+  color: #e5a9a4;
+  font: 0.8rem monospace;
+  letter-spacing: 0.08em;
+}
+.eyebrow {
+  text-transform: uppercase;
+}
+
+.panel,
+fieldset {
+  border: 1px solid #6e4146;
+  border-radius: 0.25rem;
+  background: #1b1318;
+  padding: 1rem;
+  margin: 0 0 1rem;
+}
+
+label {
+  display: block;
+  font-size: 0.9rem;
+  margin: 0.55rem 0;
+}
+input,
+button {
+  font: inherit;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #9d6566;
+  border-radius: 0.2rem;
+  color: inherit;
+  background: #241820;
+}
+input {
+  min-width: 0;
+  width: 100%;
+}
+button {
+  cursor: pointer;
+  background: #4b252d;
+}
+button:hover:not(:disabled) {
+  background: #69343e;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+:focus-visible {
+  outline: 2px solid #b9caff;
+  outline-offset: 3px;
+}
+
+.inline,
+.instruments {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.instruments {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.instruments input {
+  display: block;
+  margin-top: 0.25rem;
+}
+#timer {
+  color: #f6b0aa;
+  font: 700 2.75rem monospace;
+}
+[data-danger="true"] #timer {
+  color: #ff7878;
+  text-shadow: 0 0 1rem #e8303e;
+}
+[data-phase="escaped"] #timer {
+  color: #b7ddaf;
+}
+
+fieldset,
+.details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+  gap: 0.65rem;
+}
+fieldset button {
+  text-align: left;
+  min-height: 4rem;
+}
+fieldset button span {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+[data-target="painting"] {
+  background: #24345b;
+  border-color: #7e96c6;
+}
+[data-target="painting"]:hover:not(:disabled) {
+  background: #364b77;
+}
+#notebook {
+  padding-left: 1.3rem;
+}
+#notebook li {
+  margin-bottom: 0.35rem;
+}
+.transmission {
+  border-left: 4px solid #c78079;
+}
