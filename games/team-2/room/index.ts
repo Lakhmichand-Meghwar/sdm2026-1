@@ -108,6 +108,12 @@ export class EscapeRun {
       patient.station = action.station;
       return;
     }
+    if (action.type === "flip-photo") {
+      if (patient.station !== "photo") return;
+      this.remember("photo");
+      this.state.message = "The year on the back of the photograph goes into the notebook.";
+      return;
+    }
     if (action.type === "password") {
       patient.station = "terminal";
       if (!this.state.cabinetOpen) this.state.message = "The terminal is unpowered. Check the cabinet.";
@@ -126,8 +132,7 @@ export class EscapeRun {
         this.state.message = "A note in blue ink. You add it to the notebook.";
         break;
       case "photo":
-        this.remember("photo");
-        this.state.message = "You record the date. Someone in the photo has your face.";
+        this.state.message = "Someone in the photograph has your face. Look at the back.";
         break;
       case "painting":
         if (this.state.cabinetOpen) this.state.message = "The niche behind the painting is empty.";
