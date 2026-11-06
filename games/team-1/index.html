@@ -19,11 +19,46 @@
           <p class="start-sub">Two detectives. One loop. Escape together.</p>
         </div>
         <p class="start-lore">
-          Two detectives wake up in a locked room.
-          <strong>90 seconds</strong> before the loop resets.<br />
-          Objects vanish. <strong>Your knowledge doesn't.</strong>
+          Three rooms. Two detectives. <strong>Less time in every room.</strong><br />
+          Objects vanish when the loop resets. <strong>Your knowledge doesn't.</strong>
         </p>
         <button type="button" id="btn-start" class="btn-primary">Begin</button>
+      </div>
+    </div>
+
+    <!-- ── INTRO SLIDES ── -->
+    <div id="screen-intro" class="fullscreen hidden">
+      <div class="intro-inner">
+        <div class="intro-step" id="intro-step">1 / 4</div>
+        <h2 class="intro-title" id="intro-title">The loop</h2>
+        <p class="intro-body" id="intro-body"></p>
+        <div class="intro-dots" id="intro-dots"></div>
+        <div class="intro-actions">
+          <button type="button" class="btn-secondary" id="intro-skip">Skip</button>
+          <button type="button" class="btn-primary" id="intro-next">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── LEVEL BRIEFING ── -->
+    <div id="screen-brief" class="fullscreen hidden overlay">
+      <div class="brief-inner">
+        <div class="brief-prev" id="brief-prev"></div>
+        <div class="brief-level" id="brief-level">Level 1 of 3</div>
+        <h2 class="brief-name" id="brief-name">The Office</h2>
+        <p class="brief-story" id="brief-story"></p>
+        <div class="brief-facts">
+          <div class="brief-fact">
+            <span class="brief-fact-num" id="brief-time">90s</span>
+            <span class="brief-fact-label">per loop</span>
+          </div>
+          <div class="brief-fact">
+            <span class="brief-fact-num" id="brief-penalty">0s</span>
+            <span class="brief-fact-label">per mistake</span>
+          </div>
+        </div>
+        <p class="brief-rule" id="brief-rule"></p>
+        <button type="button" class="btn-primary" id="brief-go">Enter the room</button>
       </div>
     </div>
 
@@ -44,6 +79,9 @@
           <span class="title-line"></span>
         </div>
         <div class="top-right">
+          <div id="level-badge" class="loop-badge">
+            <span id="level-name">The Office</span> · Room <span id="level-num">1</span>/3
+          </div>
           <div id="loop-badge" class="loop-badge">Loop <span id="loop-num">1</span></div>
           <div id="timer-box" class="timer-box">
             <span id="timer-display">01:30</span>
@@ -59,6 +97,9 @@
         <div class="room-ceil-shadow"></div>
         <div class="lamp-glow" id="lamp-glow"></div>
         <div class="window-glow"></div>
+
+        <!-- ═════════ SCENE 1 · THE OFFICE ═════════ -->
+        <div class="scene" id="scene-1">
 
         <!-- WINDOW (top-left) -->
         <div class="obj r-window" id="obj-window">
@@ -240,6 +281,122 @@
           <div class="obj-tooltip">Exit door</div>
         </div>
 
+        </div>
+
+        <!-- ═════════ SCENE 2 · THE ARCHIVE ═════════ -->
+        <div class="scene hidden" id="scene-2">
+          <div class="a-shelf">
+            <div class="a-row">
+              <span class="spine sp1"></span><span class="spine sp2"></span><span class="spine sp3"></span>
+              <span class="spine sp4"></span><span class="spine sp1"></span><span class="spine sp3"></span>
+              <span class="spine sp2"></span><span class="spine sp4"></span><span class="spine sp1"></span>
+            </div>
+            <div class="a-row a-pull-row">
+              <span class="spine sp2"></span>
+              <div class="interactive a-book bk-red" id="obj-book-0"></div>
+              <div class="interactive a-book bk-blue" id="obj-book-1"></div>
+              <div class="interactive a-book bk-green" id="obj-book-2"></div>
+              <div class="interactive a-book bk-amber" id="obj-book-3"></div>
+              <span class="spine sp4"></span>
+            </div>
+            <div class="a-row a-boxes">
+              <span class="a-box"></span><span class="a-box"></span><span class="a-box"></span>
+            </div>
+            <div class="a-counter" id="shelf-counter">0 / 4</div>
+          </div>
+
+          <div class="obj interactive a-card" id="obj-card">
+            <div class="a-card-lines"></div>
+            <div class="obj-tooltip">Index card</div>
+          </div>
+
+          <div class="obj interactive a-calendar" id="obj-calendar">
+            <div class="cal-head"></div>
+            <div class="cal-day">17</div>
+            <div class="obj-tooltip">Wall calendar</div>
+          </div>
+
+          <div class="a-desk">
+            <div class="a-drawer" id="a-drawer"><i class="a-drawer-handle"></i></div>
+          </div>
+          <div class="obj interactive a-key hidden" id="obj-key2">
+            <div class="key-float">🗝</div>
+            <div class="obj-tooltip">Brass key</div>
+          </div>
+
+          <div class="obj interactive a-filing" id="obj-filing">
+            <div class="filing-body">
+              <div class="filing-drawer" id="filing-top"><i class="filing-handle"></i></div>
+              <div class="filing-drawer"><i class="filing-handle"></i></div>
+              <div class="filing-drawer"><i class="filing-handle"></i></div>
+              <div class="cab-lock-shape locked" id="filing-lock"></div>
+            </div>
+            <div class="obj-tooltip" id="filing-label">Filing cabinet</div>
+          </div>
+          <div class="obj interactive a-folder hidden" id="obj-folder">
+            <div class="folder-tab"></div>
+            <div class="obj-tooltip">Case folder</div>
+          </div>
+
+          <div class="obj interactive a-door" id="obj-door2">
+            <div class="a-door-body">
+              <div class="keypad">
+                <div class="keypad-display" id="door2-display">----</div>
+                <div class="keypad-keys">
+                  <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                </div>
+              </div>
+            </div>
+            <div class="obj-tooltip">Archive door</div>
+          </div>
+        </div>
+
+        <!-- ═════════ SCENE 3 · THE VAULT ═════════ -->
+        <div class="scene hidden" id="scene-3">
+          <div class="v-plates"></div>
+
+          <div class="obj interactive v-poster" id="obj-poster">
+            <div class="poster-title">Switch routine</div>
+            <div class="poster-rows"><i></i><i></i><i></i><i></i></div>
+            <div class="obj-tooltip">Poster</div>
+          </div>
+
+          <div class="v-panel">
+            <div class="v-led" id="v-led"></div>
+            <div class="v-switches">
+              <div class="interactive v-switch" id="obj-sw-0"><i class="v-lever"></i></div>
+              <div class="interactive v-switch" id="obj-sw-1"><i class="v-lever"></i></div>
+              <div class="interactive v-switch" id="obj-sw-2"><i class="v-lever"></i></div>
+              <div class="interactive v-switch" id="obj-sw-3"><i class="v-lever"></i></div>
+            </div>
+            <div class="v-panel-label">Power</div>
+          </div>
+
+          <div class="obj interactive v-safe" id="obj-safe">
+            <div class="safe-body" id="safe-body">
+              <div class="safe-inside"><span>Exit pass</span></div>
+              <div class="safe-door">
+                <div class="safe-dial"></div>
+                <div class="safe-handle"></div>
+              </div>
+            </div>
+            <div class="obj-tooltip">Safe</div>
+          </div>
+
+          <div class="obj interactive v-terminal" id="obj-terminal">
+            <div class="term-screen" id="term-screen"><span id="term-text">No power</span></div>
+            <div class="term-stand"></div>
+            <div class="obj-tooltip">Terminal</div>
+          </div>
+
+          <div class="obj interactive v-door" id="obj-door3">
+            <div class="v-door-body" id="v-door-body">
+              <div class="v-wheel"></div>
+            </div>
+            <div class="obj-tooltip">Vault hatch</div>
+          </div>
+        </div>
+
         <!-- TOAST -->
         <div id="toast-area"></div>
       </main>
@@ -299,11 +456,11 @@
     <div id="modal-laptop" class="fullscreen hidden overlay modal-backdrop">
       <div class="modal-box">
         <div class="modal-titlebar">
-          <span>Access control system</span>
+          <span id="modal-title">Access control system</span>
           <button type="button" class="modal-close" id="modal-close">✕</button>
         </div>
         <div class="modal-screen">
-          <div class="modal-os-line">SECURE OS v2.1 — enter year code</div>
+          <div class="modal-os-line" id="modal-os">SECURE OS v2.1 — enter year code</div>
           <div class="modal-scanlines"></div>
           <input
             id="code-input"
@@ -330,7 +487,11 @@
         <div class="win-title">Escaped</div>
         <div class="win-stats">
           <div class="stat-card">
-            <span class="stat-num" id="stat-loops">1</span>
+            <span class="stat-num">3/3</span>
+            <span class="stat-label">Rooms</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-num" id="stat-loops">3</span>
             <span class="stat-label">Loops</span>
           </div>
           <div class="stat-card">

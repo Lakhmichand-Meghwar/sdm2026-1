@@ -1,5 +1,5 @@
 /** All DOM reads and writes. No game logic here. */
-import type { Clue, PlayerId } from "./game.ts";
+import type { Clue, LevelDef, PlayerId } from "./game.ts";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,18 +23,22 @@ function setClass(id: string, cls: string, on: boolean): void {
 
 // ── screens ──────────────────────────────────────────────────────────────────
 
+const SCREENS = ["screen-start", "screen-intro", "screen-game", "screen-brief", "screen-reset", "screen-win"];
+
+function only(...visible: string[]): void {
+  for (const id of SCREENS) setClass(id, "hidden", !visible.includes(id));
+}
+
 export function showStart(): void {
-  show("screen-start");
-  hide("screen-game");
-  hide("screen-reset");
-  hide("screen-win");
+  only("screen-start");
+}
+
+export function showIntro(): void {
+  only("screen-intro");
 }
 
 export function showGame(): void {
-  hide("screen-start");
-  show("screen-game");
-  hide("screen-reset");
-  hide("screen-win");
+  only("screen-game");
 }
 
 export function showReset(nextLoop: number): void {
@@ -46,17 +50,59 @@ export function hideReset(): void {
   hide("screen-reset");
 }
 
-export function showWin(loops: number, timeLeft: number): void {
-  hide("screen-game");
-  show("screen-win");
-  el("stat-loops").textContent = String(loops);
+export function renderIntroSlide(
+  index: number,
+  total: number,
+  title: string,
+  body: string,
+  last: boolean,
+): void {
+  el("intro-step").textContent = `${index + 1} / ${total}`;
+  el("intro-title").textContent = title;
+  el("intro-body").textContent = body;
+  el("intro-next").textContent = last ? "Enter the office" : "Next";
+  setClass("intro-skip", "hidden", last);
+  el("intro-dots").innerHTML = Array.from(
+    { length: total },
+    (_, i) => `<span class="intro-dot${i === index ? " on" : ""}"></span>`,
+  ).join("");
+}
+
+export function showBrief(def: LevelDef, total: number, previous: string): void {
+  el("brief-prev").textContent = previous;
+  setClass("brief-prev", "hidden", previous === "");
+  el("brief-level").textContent = `Level ${def.id} of ${total}`;
+  el("brief-name").textContent = def.name;
+  el("brief-story").textContent = def.story;
+  el("brief-time").textContent = `${def.duration}s`;
+  el("brief-penalty").textContent = `${def.penalty}s`;
+  el("brief-rule").textContent = def.rule;
+  show("screen-brief");
+}
+
+export function hideBrief(): void {
+  hide("screen-brief");
+}
+
+export function showWin(totalLoops: number, timeLeft: number, resets: number): void {
+  only("screen-win");
+  el("stat-loops").textContent = String(totalLoops);
   el("stat-time").textContent = `${timeLeft}s`;
-  const msgs: Record<number, string> = {
-    1: "Perfect — both detectives escaped on the first loop.",
-    2: "Two loops. The clues connected. You're out.",
-    3: "Three loops — knowledge built, the year revealed, the door open.",
-  };
-  el("win-msg").textContent = msgs[loops] ?? `After ${loops} loops, both detectives finally break the cycle.`;
+  el("win-msg").textContent =
+    resets === 0
+      ? "All three rooms without a single reset. Flawless."
+      : resets === 1
+        ? "One reset across three rooms. The clues did the work."
+        : `${resets} resets across three rooms. You remembered everything that mattered.`;
+}
+
+// ── levels ───────────────────────────────────────────────────────────────────
+
+export function setLevel(def: LevelDef, total: number): void {
+  for (let i = 1; i <= total; i++) setClass(`scene-${i}`, "hidden", i !== def.id);
+  el("room").dataset.level = String(def.id);
+  el("level-name").textContent = def.name;
+  el("level-num").textContent = String(def.id);
 }
 
 // ── HUD ──────────────────────────────────────────────────────────────────────
@@ -64,7 +110,8 @@ export function showWin(loops: number, timeLeft: number): void {
 export function updateTimer(timeLeft: number, total: number): void {
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
-  el("timer-display").textContent = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  el("timer-display").textContent =
+    `${String(mins).padStart(2, "0")}:${String(Math.max(0, secs)).padStart(2, "0")}`;
 
   const box = el("timer-box");
   box.classList.remove("timer-warn", "timer-danger");
@@ -87,20 +134,17 @@ export function setPlayerKey(player: PlayerId, has: boolean): void {
 }
 
 export function updateActivePlayer(player: PlayerId): void {
-  // Top bar badge
   el("apb-p1").classList.toggle("active", player === 1);
   el("apb-p2").classList.toggle("active", player === 2);
-  // Player cards in HUD
   el("player-1-card").classList.toggle("active", player === 1);
   el("player-2-card").classList.toggle("active", player === 2);
-  // Turn labels
   el("p1-turn").textContent = player === 1 ? "Your turn" : "Waiting";
   el("p2-turn").textContent = player === 2 ? "Your turn" : "Waiting";
 }
 
 // ── clues ─────────────────────────────────────────────────────────────────────
 
-export function renderClues(clues: Clue[]): void {
+export function renderClues(clues: Clue[], level: number): void {
   const list = el<HTMLUListElement>("clue-list");
   if (clues.length === 0) {
     list.innerHTML = `<li class="clue-empty">No clues yet — explore the room.</li>`;
@@ -109,15 +153,16 @@ export function renderClues(clues: Clue[]): void {
   list.innerHTML = clues
     .map(
       (c) =>
-        `<li class="clue-item">
+        `<li class="clue-item${c.level < level ? " clue-old" : ""}">
           <span class="clue-text">${c.text}</span>
           <span class="clue-detail">${c.detail}</span>
         </li>`,
     )
     .join("");
+  list.scrollTop = list.scrollHeight;
 }
 
-// ── room objects ──────────────────────────────────────────────────────────────
+// ── level 1 · the office ──────────────────────────────────────────────────────
 
 export function updatePaintCounter(clicks: number): void {
   el("paint-counter").textContent = clicks >= 4 ? "✓" : `${clicks} / 4`;
@@ -168,10 +213,97 @@ export function resetPaintCounter(): void {
   el("paint-counter").textContent = "0 / 4";
 }
 
-// ── laptop modal ──────────────────────────────────────────────────────────────
+// ── level 2 · the archive ─────────────────────────────────────────────────────
 
-export function openLaptopModal(hint: string): void {
-  el("modal-hint").textContent = hint;
+export function updateShelfCounter(step: number): void {
+  el("shelf-counter").textContent = step >= 4 ? "✓" : `${step} / 4`;
+}
+
+export function setBookPulled(index: number, pulled: boolean): void {
+  setClass(`obj-book-${index}`, "pulled", pulled);
+}
+
+export function clearBooks(): void {
+  for (let i = 0; i < 4; i++) setBookPulled(i, false);
+}
+
+export function flashWrongBook(index: number): void {
+  const book = el(`obj-book-${index}`);
+  book.classList.remove("wrong");
+  void book.offsetWidth;
+  book.classList.add("wrong");
+}
+
+export function openDrawer(): void {
+  el("a-drawer").classList.add("open");
+  show("obj-key2");
+}
+
+export function hideKey2(): void {
+  hide("obj-key2");
+}
+
+export function openFiling(): void {
+  el("obj-filing").classList.add("open");
+  el("filing-lock").className = "cab-lock-shape";
+  el("filing-label").textContent = "Open cabinet";
+  show("obj-folder");
+}
+
+export function setArchiveDone(): void {
+  el("door2-display").textContent = "OPEN";
+  el("obj-door2").classList.add("door-unlocked");
+}
+
+export function resetArchive(): void {
+  clearBooks();
+  updateShelfCounter(0);
+  el("a-drawer").classList.remove("open");
+  hide("obj-key2");
+  el("obj-filing").classList.remove("open");
+  el("filing-lock").className = "cab-lock-shape locked";
+  el("filing-label").textContent = "Filing cabinet";
+  hide("obj-folder");
+  el("door2-display").textContent = "----";
+  el("obj-door2").classList.remove("door-unlocked");
+}
+
+// ── level 3 · the vault ───────────────────────────────────────────────────────
+
+export function setSwitch(index: number, on: boolean): void {
+  setClass(`obj-sw-${index}`, "up", on);
+}
+
+export function setPower(on: boolean): void {
+  setClass("v-led", "on", on);
+  setClass("obj-terminal", "powered", on);
+  el("term-text").textContent = on ? "Online" : "No power";
+}
+
+export function openSafe(): void {
+  el("safe-body").classList.add("open");
+  el("obj-door3").classList.add("door-unlocked");
+}
+
+export function resetVault(): void {
+  for (let i = 0; i < 4; i++) setSwitch(i, false);
+  setPower(false);
+  el("safe-body").classList.remove("open");
+  el("obj-door3").classList.remove("door-unlocked");
+}
+
+// ── code modal ────────────────────────────────────────────────────────────────
+
+export interface CodePrompt {
+  title: string;
+  os: string;
+  hint: string;
+}
+
+export function openCodeModal(prompt: CodePrompt): void {
+  el("modal-title").textContent = prompt.title;
+  el("modal-os").textContent = prompt.os;
+  el("modal-hint").textContent = prompt.hint;
   el<HTMLInputElement>("code-input").value = "";
   el("modal-status").textContent = "";
   el("modal-status").className = "modal-status";
@@ -203,16 +335,21 @@ export function toast(message: string, kind: ToastKind = "info"): void {
   div.className = `toast toast-${kind}`;
   div.textContent = message;
   area.appendChild(div);
+  while (area.children.length > 3) area.firstElementChild?.remove();
   setTimeout(() => div.remove(), 3200);
 }
 
 // ── rain canvas ───────────────────────────────────────────────────────────────
 
+let rainStarted = false;
+
 export function startRain(): void {
+  if (rainStarted) return;
   const canvas = document.getElementById("rain-canvas") as HTMLCanvasElement | null;
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  rainStarted = true;
 
   const cv: HTMLCanvasElement = canvas;
   const cx: CanvasRenderingContext2D = ctx;
@@ -293,7 +430,7 @@ export function startParticles(): void {
     vy: (Math.random() - 0.5) * 2,
     r: Math.random() * 2 + 1,
     a: Math.random() * 0.6 + 0.2,
-    hue: 30 + Math.random() * 20, // amber tones
+    hue: 30 + Math.random() * 20,
   }));
 
   let frame = 0;
