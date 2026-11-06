@@ -1,5 +1,5 @@
-/** All DOM reads and writes. No game logic here. */
-import type { Clue, LevelDef, PlayerId } from "./game.ts";
+/** All DOM reads and writes. No game logic here: every setter can be called again with the same value. */
+import { CLUE_DEFS, isClueId, type LevelInfo, SHELF_ORDER } from "../shared/rules.ts";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -9,46 +9,37 @@ function el<T extends HTMLElement>(id: string): T {
   return node as T;
 }
 
-function show(id: string): void {
-  el(id).classList.remove("hidden");
-}
-
-function hide(id: string): void {
-  el(id).classList.add("hidden");
+function setHidden(id: string, hidden: boolean): void {
+  el(id).classList.toggle("hidden", hidden);
 }
 
 function setClass(id: string, cls: string, on: boolean): void {
   el(id).classList.toggle(cls, on);
 }
 
+function setText(id: string, text: string): void {
+  const node = el(id);
+  if (node.textContent !== text) node.textContent = text;
+}
+
 // ── screens ──────────────────────────────────────────────────────────────────
 
-const SCREENS = ["screen-start", "screen-intro", "screen-game", "screen-brief", "screen-reset", "screen-win"];
+export type MainScreen = "start" | "intro" | "lobby" | "game" | "win";
+export type Overlay = "brief" | "wait" | "reset" | "lost";
 
-function only(...visible: string[]): void {
-  for (const id of SCREENS) setClass(id, "hidden", !visible.includes(id));
+const MAIN_SCREENS: MainScreen[] = ["start", "intro", "lobby", "game", "win"];
+const OVERLAYS: Overlay[] = ["brief", "wait", "reset", "lost"];
+
+export function showMain(name: MainScreen): void {
+  for (const screen of MAIN_SCREENS) setHidden(`screen-${screen}`, screen !== name);
 }
 
-export function showStart(): void {
-  only("screen-start");
+/** Shows one overlay on top of the main screen, or none. */
+export function setOverlay(name: Overlay | null): void {
+  for (const overlay of OVERLAYS) setHidden(`screen-${overlay}`, overlay !== name);
 }
 
-export function showIntro(): void {
-  only("screen-intro");
-}
-
-export function showGame(): void {
-  only("screen-game");
-}
-
-export function showReset(nextLoop: number): void {
-  el("reset-loop-num").textContent = `Loop ${nextLoop}`;
-  show("screen-reset");
-}
-
-export function hideReset(): void {
-  hide("screen-reset");
-}
+// ── intro and lobby ──────────────────────────────────────────────────────────
 
 export function renderIntroSlide(
   index: number,
@@ -57,239 +48,231 @@ export function renderIntroSlide(
   body: string,
   last: boolean,
 ): void {
-  el("intro-step").textContent = `${index + 1} / ${total}`;
-  el("intro-title").textContent = title;
-  el("intro-body").textContent = body;
-  el("intro-next").textContent = last ? "Enter the office" : "Next";
-  setClass("intro-skip", "hidden", last);
+  setText("intro-step", `${index + 1} / ${total}`);
+  setText("intro-title", title);
+  setText("intro-body", body);
+  setText("intro-next", last ? "Find your partner" : "Next");
+  setHidden("intro-skip", last);
   el("intro-dots").innerHTML = Array.from(
     { length: total },
     (_, i) => `<span class="intro-dot${i === index ? " on" : ""}"></span>`,
   ).join("");
 }
 
-export function showBrief(def: LevelDef, total: number, previous: string): void {
-  el("brief-prev").textContent = previous;
-  setClass("brief-prev", "hidden", previous === "");
-  el("brief-level").textContent = `Level ${def.id} of ${total}`;
-  el("brief-name").textContent = def.name;
-  el("brief-story").textContent = def.story;
-  el("brief-time").textContent = `${def.duration}s`;
-  el("brief-penalty").textContent = `${def.penalty}s`;
-  el("brief-rule").textContent = def.rule;
-  show("screen-brief");
+export function getLobbyName(): string {
+  return el<HTMLInputElement>("lobby-name").value.trim();
 }
 
-export function hideBrief(): void {
-  hide("screen-brief");
+export function setLobbyName(name: string): void {
+  el<HTMLInputElement>("lobby-name").value = name;
 }
 
-export function showWin(totalLoops: number, timeLeft: number, resets: number): void {
-  only("screen-win");
-  el("stat-loops").textContent = String(totalLoops);
-  el("stat-time").textContent = `${timeLeft}s`;
-  el("win-msg").textContent =
+export function getLobbyCode(): string {
+  return el<HTMLInputElement>("lobby-code").value;
+}
+
+export function setLobbyCode(code: string): void {
+  el<HTMLInputElement>("lobby-code").value = code;
+}
+
+export function setLobbyError(text: string): void {
+  setText("lobby-error", text);
+}
+
+export function setLobbyBusy(busy: boolean): void {
+  for (const id of ["lobby-create", "lobby-join"]) el<HTMLButtonElement>(id).disabled = busy;
+}
+
+export function setWait(code: string, link: string): void {
+  setText("wait-code", code || "----");
+  setText("wait-link", link);
+}
+
+export function setLostText(text: string): void {
+  setText("lost-text", text);
+}
+
+// ── briefing, reset and win ──────────────────────────────────────────────────
+
+export function setBrief(
+  info: LevelInfo,
+  total: number,
+  duration: number,
+  penalty: number,
+  previous: string,
+  iAmReady: boolean,
+): void {
+  setText("brief-prev", previous);
+  setHidden("brief-prev", previous === "");
+  setText("brief-level", `Level ${info.id} of ${total}`);
+  setText("brief-name", info.name);
+  setText("brief-story", info.story);
+  setText("brief-time", `${duration}s`);
+  setText("brief-penalty", `${penalty}s`);
+  setText("brief-rule", info.rule);
+  el<HTMLButtonElement>("brief-go").disabled = iAmReady;
+  setHidden("brief-wait", !iAmReady);
+}
+
+export function setResetLoop(nextLoop: number): void {
+  setText("reset-loop-num", `Loop ${nextLoop}`);
+}
+
+export function setWin(totalLoops: number, timeLeft: number, resets: number): void {
+  setText("stat-loops", String(totalLoops));
+  setText("stat-time", `${timeLeft}s`);
+  setText(
+    "win-msg",
     resets === 0
       ? "All three rooms without a single reset. Flawless."
       : resets === 1
         ? "One reset across three rooms. The clues did the work."
-        : `${resets} resets across three rooms. You remembered everything that mattered.`;
-}
-
-// ── levels ───────────────────────────────────────────────────────────────────
-
-export function setLevel(def: LevelDef, total: number): void {
-  for (let i = 1; i <= total; i++) setClass(`scene-${i}`, "hidden", i !== def.id);
-  el("room").dataset.level = String(def.id);
-  el("level-name").textContent = def.name;
-  el("level-num").textContent = String(def.id);
+        : `${resets} resets across three rooms. You remembered everything that mattered.`,
+  );
 }
 
 // ── HUD ──────────────────────────────────────────────────────────────────────
 
-export function updateTimer(timeLeft: number, total: number): void {
+export function setLevel(info: LevelInfo): void {
+  for (let i = 1; i <= 3; i++) setHidden(`scene-${i}`, i !== info.id);
+  el("room").dataset.level = String(info.id);
+  setText("level-name", info.name);
+  setText("level-num", String(info.id));
+}
+
+export function setTimer(timeLeft: number, total: number): void {
   const mins = Math.floor(timeLeft / 60);
   const secs = timeLeft % 60;
-  el("timer-display").textContent =
-    `${String(mins).padStart(2, "0")}:${String(Math.max(0, secs)).padStart(2, "0")}`;
-
+  setText("timer-display", `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`);
   const box = el("timer-box");
-  box.classList.remove("timer-warn", "timer-danger");
-  if (timeLeft <= 15) box.classList.add("timer-danger");
-  else if (timeLeft <= 30) box.classList.add("timer-warn");
-
-  const pct = (timeLeft / total) * 100;
-  box.style.setProperty("--timer-pct", `${pct}%`);
+  box.classList.toggle("timer-danger", timeLeft <= 15);
+  box.classList.toggle("timer-warn", timeLeft > 15 && timeLeft <= 30);
+  box.style.setProperty("--timer-pct", `${(timeLeft / total) * 100}%`);
 }
 
-export function updateLoop(loop: number): void {
-  el("loop-num").textContent = String(loop);
+export function setLoop(loop: number): void {
+  setText("loop-num", String(loop));
 }
 
-export function setPlayerKey(player: PlayerId, has: boolean): void {
-  const slotId = player === 1 ? "p1-slot" : "p2-slot";
-  const keyId = player === 1 ? "p1-key" : "p2-key";
-  setClass(keyId, "hidden", !has);
-  setClass(slotId, "has-item", has);
+export function setRoomCode(code: string): void {
+  setText("room-code", code || "----");
 }
 
-export function updateActivePlayer(player: PlayerId): void {
-  el("apb-p1").classList.toggle("active", player === 1);
-  el("apb-p2").classList.toggle("active", player === 2);
-  el("player-1-card").classList.toggle("active", player === 1);
-  el("player-2-card").classList.toggle("active", player === 2);
-  el("p1-turn").textContent = player === 1 ? "Your turn" : "Waiting";
-  el("p2-turn").textContent = player === 2 ? "Your turn" : "Waiting";
+export interface PlayerCard {
+  name: string;
+  status: string;
+  you: boolean;
+  holdsKey: boolean;
 }
 
-// ── clues ─────────────────────────────────────────────────────────────────────
+export function setPlayerCard(slot: 1 | 2, card: PlayerCard): void {
+  setText(`p${slot}-name`, card.you ? `${card.name} (you)` : card.name);
+  setText(`p${slot}-status`, card.status);
+  setClass(`player-${slot}-card`, "active", card.you);
+  setClass(`p${slot}-key`, "hidden", !card.holdsKey);
+  setClass(`p${slot}-slot`, "has-item", card.holdsKey);
+}
 
-export function renderClues(clues: Clue[], level: number): void {
+export function setBanner(text: string | null): void {
+  setHidden("partner-banner", text === null);
+  if (text !== null) setText("partner-banner", text);
+}
+
+export function renderClues(ids: readonly string[], level: number): void {
   const list = el<HTMLUListElement>("clue-list");
-  if (clues.length === 0) {
+  const key = `${level}:${ids.join(",")}`;
+  if (list.dataset.key === key) return;
+  list.dataset.key = key;
+  if (ids.length === 0) {
     list.innerHTML = `<li class="clue-empty">No clues yet — explore the room.</li>`;
     return;
   }
-  list.innerHTML = clues
-    .map(
-      (c) =>
-        `<li class="clue-item${c.level < level ? " clue-old" : ""}">
-          <span class="clue-text">${c.text}</span>
-          <span class="clue-detail">${c.detail}</span>
-        </li>`,
-    )
+  list.innerHTML = ids
+    .filter(isClueId)
+    .map((id) => {
+      const clue = CLUE_DEFS[id];
+      return `<li class="clue-item${clue.level < level ? " clue-old" : ""}">
+          <span class="clue-text">${clue.text}</span>
+          <span class="clue-detail">${clue.detail}</span>
+        </li>`;
+    })
     .join("");
   list.scrollTop = list.scrollHeight;
 }
 
 // ── level 1 · the office ──────────────────────────────────────────────────────
 
-export function updatePaintCounter(clicks: number): void {
-  el("paint-counter").textContent = clicks >= 4 ? "✓" : `${clicks} / 4`;
+export function setPaintCounter(clicks: number): void {
+  setText("paint-counter", clicks >= 4 ? "✓" : `${clicks} / 4`);
 }
 
-export function showKey(): void {
-  show("obj-key");
+export function setKeyVisible(visible: boolean): void {
+  setHidden("obj-key", !visible);
 }
 
-export function hideKey(): void {
-  hide("obj-key");
+export function setCabinetOpen(open: boolean): void {
+  setHidden("cab-doors", open);
+  setHidden("cab-interior", !open);
+  setText("cab-label", open ? "Open wardrobe" : "Wardrobe");
+  el("cab-lock").className = open ? "cab-lock-shape" : "cab-lock-shape locked";
 }
 
-export function openCabinet(): void {
-  hide("cab-doors");
-  show("cab-interior");
-  el("cab-label").textContent = "Open wardrobe";
+export function setPhotoVisible(visible: boolean): void {
+  setHidden("obj-photo", !visible);
 }
 
-export function resetCabinet(): void {
-  show("cab-doors");
-  hide("cab-interior");
-  el("cab-label").textContent = "Wardrobe";
-  el("cab-lock").className = "cab-lock-shape locked";
-}
-
-export function showPhoto(): void {
-  show("obj-photo");
-}
-
-export function hidePhoto(): void {
-  hide("obj-photo");
-}
-
-export function setLaptopDone(): void {
-  hide("screen-locked");
-  show("screen-open");
-  el("obj-door").classList.add("door-unlocked");
-}
-
-export function resetLaptop(): void {
-  show("screen-locked");
-  hide("screen-open");
-  el("obj-door").classList.remove("door-unlocked");
-}
-
-export function resetPaintCounter(): void {
-  el("paint-counter").textContent = "0 / 4";
+export function setLaptopDone(done: boolean): void {
+  setHidden("screen-locked", done);
+  setHidden("screen-open", !done);
+  setClass("obj-door", "door-unlocked", done);
 }
 
 // ── level 2 · the archive ─────────────────────────────────────────────────────
 
-export function updateShelfCounter(step: number): void {
-  el("shelf-counter").textContent = step >= 4 ? "✓" : `${step} / 4`;
+export function setShelf(step: number): void {
+  setText("shelf-counter", step >= SHELF_ORDER.length ? "✓" : `${step} / ${SHELF_ORDER.length}`);
+  for (let book = 0; book < 4; book++) {
+    setClass(`obj-book-${book}`, "pulled", SHELF_ORDER.slice(0, step).includes(book));
+  }
 }
 
-export function setBookPulled(index: number, pulled: boolean): void {
-  setClass(`obj-book-${index}`, "pulled", pulled);
+export function setDrawerOpen(open: boolean): void {
+  setClass("a-drawer", "open", open);
 }
 
-export function clearBooks(): void {
-  for (let i = 0; i < 4; i++) setBookPulled(i, false);
+export function setKey2Visible(visible: boolean): void {
+  setHidden("obj-key2", !visible);
 }
 
-export function flashWrongBook(index: number): void {
-  const book = el(`obj-book-${index}`);
-  book.classList.remove("wrong");
-  void book.offsetWidth;
-  book.classList.add("wrong");
+export function setFilingOpen(open: boolean): void {
+  setClass("obj-filing", "open", open);
+  el("filing-lock").className = open ? "cab-lock-shape" : "cab-lock-shape locked";
+  setText("filing-label", open ? "Open cabinet" : "Filing cabinet");
+  setHidden("obj-folder", !open);
 }
 
-export function openDrawer(): void {
-  el("a-drawer").classList.add("open");
-  show("obj-key2");
-}
-
-export function hideKey2(): void {
-  hide("obj-key2");
-}
-
-export function openFiling(): void {
-  el("obj-filing").classList.add("open");
-  el("filing-lock").className = "cab-lock-shape";
-  el("filing-label").textContent = "Open cabinet";
-  show("obj-folder");
-}
-
-export function setArchiveDone(): void {
-  el("door2-display").textContent = "OPEN";
-  el("obj-door2").classList.add("door-unlocked");
-}
-
-export function resetArchive(): void {
-  clearBooks();
-  updateShelfCounter(0);
-  el("a-drawer").classList.remove("open");
-  hide("obj-key2");
-  el("obj-filing").classList.remove("open");
-  el("filing-lock").className = "cab-lock-shape locked";
-  el("filing-label").textContent = "Filing cabinet";
-  hide("obj-folder");
-  el("door2-display").textContent = "----";
-  el("obj-door2").classList.remove("door-unlocked");
+export function setArchiveKeypad(mask: number, done: boolean): void {
+  const month = (mask & 1) !== 0 ? "04" : "--";
+  const day = (mask & 2) !== 0 ? "17" : "--";
+  setText("door2-display", done ? "OPEN" : `${month}${day}`);
+  setClass("obj-door2", "door-unlocked", done);
 }
 
 // ── level 3 · the vault ───────────────────────────────────────────────────────
 
-export function setSwitch(index: number, on: boolean): void {
-  setClass(`obj-sw-${index}`, "up", on);
+export function setSwitches(mask: number): void {
+  for (let i = 0; i < 4; i++) setClass(`obj-sw-${i}`, "up", (mask & (1 << i)) !== 0);
 }
 
 export function setPower(on: boolean): void {
   setClass("v-led", "on", on);
   setClass("obj-terminal", "powered", on);
-  el("term-text").textContent = on ? "Online" : "No power";
+  setText("term-text", on ? "Online" : "No power");
 }
 
-export function openSafe(): void {
-  el("safe-body").classList.add("open");
-  el("obj-door3").classList.add("door-unlocked");
-}
-
-export function resetVault(): void {
-  for (let i = 0; i < 4; i++) setSwitch(i, false);
-  setPower(false);
-  el("safe-body").classList.remove("open");
-  el("obj-door3").classList.remove("door-unlocked");
+export function setSafeOpen(open: boolean): void {
+  setClass("safe-body", "open", open);
+  setClass("obj-door3", "door-unlocked", open);
 }
 
 // ── code modal ────────────────────────────────────────────────────────────────
@@ -298,21 +281,29 @@ export interface CodePrompt {
   title: string;
   os: string;
   hint: string;
+  digits: number;
 }
 
 export function openCodeModal(prompt: CodePrompt): void {
-  el("modal-title").textContent = prompt.title;
-  el("modal-os").textContent = prompt.os;
-  el("modal-hint").textContent = prompt.hint;
-  el<HTMLInputElement>("code-input").value = "";
+  setText("modal-title", prompt.title);
+  setText("modal-os", prompt.os);
+  setText("modal-hint", prompt.hint);
+  const input = el<HTMLInputElement>("code-input");
+  input.maxLength = prompt.digits;
+  input.placeholder = Array.from({ length: prompt.digits }, () => "_").join(" ");
+  input.value = "";
   el("modal-status").textContent = "";
   el("modal-status").className = "modal-status";
-  show("modal-laptop");
-  setTimeout(() => el<HTMLInputElement>("code-input").focus(), 80);
+  setHidden("modal-laptop", false);
+  setTimeout(() => input.focus(), 80);
 }
 
-export function closeLaptopModal(): void {
-  hide("modal-laptop");
+export function closeCodeModal(): void {
+  setHidden("modal-laptop", true);
+}
+
+export function isCodeModalOpen(): boolean {
+  return !el("modal-laptop").classList.contains("hidden");
 }
 
 export function setModalStatus(ok: boolean, text: string): void {
@@ -327,7 +318,7 @@ export function getCodeInput(): string {
 
 // ── toast ─────────────────────────────────────────────────────────────────────
 
-type ToastKind = "info" | "warn" | "success";
+export type ToastKind = "info" | "warn" | "success";
 
 export function toast(message: string, kind: ToastKind = "info"): void {
   const area = el("toast-area");

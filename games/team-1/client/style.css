@@ -157,24 +157,6 @@ body {
   display: flex;
   gap: 8px;
 }
-.active-player-badge {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.apb-player {
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--dim);
-  transition: color 200ms;
-}
-.apb-player.active {
-  color: var(--accent);
-}
-.apb-sep {
-  font-size: 0.6rem;
-  color: var(--dim);
-}
 .top-title {
   display: flex;
   align-items: center;
@@ -1918,9 +1900,6 @@ body {
   transform: translateY(-8px);
   outline: 1px solid rgba(255, 255, 255, 0.4);
 }
-.a-book.wrong {
-  animation: shake 0.3s;
-}
 .a-counter {
   position: absolute;
   bottom: -26px;
@@ -2387,4 +2366,135 @@ body {
 .v-door.door-unlocked .v-wheel {
   transform: translate(-50%, -50%) rotate(90deg);
   border-color: #5a8a50;
+}
+
+/* ── two-device play: room badge, lobby, waiting, banner ─────────────────── */
+.room-badge {
+  font-size: 0.72rem;
+  color: var(--dim);
+}
+#room-code {
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+#screen-lobby {
+  background: radial-gradient(ellipse at 50% 40%, #1e1812 0%, #0a0806 70%);
+}
+.lobby-inner {
+  width: min(420px, 90vw);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+}
+.lobby-title {
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.lobby-sub {
+  font-size: 0.82rem;
+  line-height: 1.8;
+  color: var(--dim);
+}
+.lobby-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.7rem;
+  color: var(--dim);
+}
+.text-input {
+  padding: 10px 12px;
+  font-family: var(--ff);
+  font-size: 0.9rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hud-border);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 160ms;
+}
+.text-input:focus {
+  border-color: rgba(184, 136, 48, 0.6);
+}
+.text-input.code {
+  width: 96px;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+}
+.lobby-actions {
+  display: flex;
+  gap: 12px;
+}
+.lobby-or {
+  font-size: 0.7rem;
+  color: var(--dim);
+}
+.lobby-join {
+  display: flex;
+  gap: 12px;
+}
+.lobby-error {
+  min-height: 20px;
+  font-size: 0.76rem;
+  color: var(--danger);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.wait-inner {
+  width: min(460px, 90vw);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.wait-label {
+  font-size: 0.7rem;
+  color: var(--dim);
+}
+.wait-code {
+  font-size: clamp(3rem, 10vw, 5rem);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: var(--accent);
+}
+.wait-text {
+  font-size: 0.84rem;
+  line-height: 1.8;
+  color: var(--dim);
+}
+.wait-link {
+  max-width: 100%;
+  padding: 8px 12px;
+  font-size: 0.7rem;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hud-border);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
+}
+.brief-wait {
+  font-size: 0.74rem;
+  color: var(--dim);
+}
+.partner-banner {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  font-size: 0.74rem;
+  color: var(--warn);
+  background: rgba(10, 8, 6, 0.92);
+  border: 1px solid rgba(200, 151, 58, 0.35);
+  border-radius: 6px;
+  z-index: 90;
+  white-space: nowrap;
 }

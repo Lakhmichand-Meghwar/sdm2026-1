@@ -4,9 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "pnpm run \"/^dev:/\"",
+    "dev:server": "tsx watch --clear-screen=false server.ts",
+    "dev:client": "vite",
     "build": "vite build",
+    "start": "tsx server.ts",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@colyseus/schema": "5.0.45",
+    "@colyseus/sdk": "0.18.9",
+    "@sdm/core": "workspace:*",
+    "@sdm/host": "workspace:*",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@sdm/tooling": "workspace:*",

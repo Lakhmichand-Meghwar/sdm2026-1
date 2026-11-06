@@ -1,26 +1,26 @@
+import { Client, type Room } from "@colyseus/sdk";
+import { buildInviteLink, normalizeRoomCode, readClientParams } from "@sdm/core/client";
+import { JoinByCodeResponseSchema, Routes, ServerMessage } from "@sdm/core/shared";
+import type { TimeLoopInput, TimeLoopState } from "../shared/index.ts";
+import type { Target } from "../shared/rules.ts";
 import "./style.css";
-import {
-  addClue,
-  advanceLevel,
-  type CodeKind,
-  checkCode,
-  type GameState,
-  hasClue,
-  LEVELS,
-  levelDef,
-  makeState,
-  pullBook,
-  resetCount,
-  resetLoop,
-  switchPlayer,
-  toggleSwitch,
-} from "./game.ts";
 import * as ui from "./ui.ts";
+import * as view from "./view.ts";
 
-// ── singleton state ───────────────────────────────────────────────────────────
+/** In local dev the server runs on :2567 of whatever host served the page, so a phone on the LAN works too. */
+const SERVER_URL: string =
+  import.meta.env.VITE_SERVER_URL ??
+  (import.meta.env.DEV ? `${location.protocol}//${location.hostname}:2567` : location.origin);
 
-let state: GameState = makeState();
-let pendingCode: CodeKind | null = null;
+const ROOM_NAME = "game";
+const TOKEN_KEY = "sdm:tle:token";
+const NAME_KEY = "sdm:tle:name";
+
+const params = readClientParams(location.search);
+const client = new Client(SERVER_URL);
+
+let room: Room<TimeLoopState> | null = null;
+let seq = 0;
 
 const INTRO = [
   {
@@ -29,7 +29,7 @@ const INTRO = [
   },
   {
     title: "Two detectives",
-    body: "Player 1 and Player 2 share one screen and take turns. Each useful action passes the turn, so talk it through and work as a pair.",
+    body: "You and a partner play together, each on your own device, in the same room. Talk to each other: some things need both of you.",
   },
   {
     title: "What stays",
@@ -43,130 +43,114 @@ const INTRO = [
 
 let introIndex = 0;
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+/** Clicking something in the room sends that action to the server; the server decides what happens. */
+const TAPS: Record<string, Target> = {
+  "obj-note": "note",
+  "obj-painting": "painting",
+  "obj-key": "key",
+  "obj-cabinet": "cabinet",
+  "obj-photo": "photo",
+  "obj-laptop": "laptop",
+  "obj-door": "door1",
+  "obj-card": "card",
+  "obj-calendar": "calendar",
+  "obj-book-0": "book0",
+  "obj-book-1": "book1",
+  "obj-book-2": "book2",
+  "obj-book-3": "book3",
+  "obj-key2": "key2",
+  "obj-filing": "filing",
+  "obj-folder": "folder",
+  "obj-door2": "door2",
+  "obj-poster": "poster",
+  "obj-sw-0": "sw0",
+  "obj-sw-1": "sw1",
+  "obj-sw-2": "sw2",
+  "obj-sw-3": "sw3",
+  "obj-terminal": "terminal",
+  "obj-safe": "safe",
+  "obj-door3": "door3",
+};
 
-function playerName(): string {
-  return `Player ${state.activePlayer}`;
-}
+// ── storage ───────────────────────────────────────────────────────────────────
 
-function switchTurn(): void {
-  switchPlayer(state);
-  ui.updateActivePlayer(state.activePlayer);
-}
-
-function levelTime(): number {
-  return levelDef(state.level).duration;
-}
-
-function refreshClues(): void {
-  ui.renderClues(state.clues, state.level);
-}
-
-/** Learn a clue: journal, toast, pass the turn. Returns false if already known. */
-function learn(id: string, message: string): boolean {
-  if (!addClue(state, id)) return false;
-  refreshClues();
-  ui.toast(message, "success");
-  switchTurn();
-  return true;
-}
-
-// ── timer ─────────────────────────────────────────────────────────────────────
-
-function startTimer(): void {
-  if (state.timerHandle !== null) clearInterval(state.timerHandle);
-  state.timerHandle = setInterval(() => {
-    if (state.phase !== "playing") return;
-    state.timeLeft -= 1;
-    ui.updateTimer(state.timeLeft, levelTime());
-    if (state.timeLeft <= 0) triggerLoopReset();
-  }, 1000);
-}
-
-/** Take time off the clock for a mistake. Returns the seconds lost. */
-function penalize(): number {
-  const seconds = levelDef(state.level).penalty;
-  if (seconds === 0) return 0;
-  state.timeLeft -= seconds;
-  ui.updateTimer(Math.max(state.timeLeft, 0), levelTime());
-  if (state.timeLeft <= 0) triggerLoopReset();
-  return seconds;
-}
-
-// ── loop reset ────────────────────────────────────────────────────────────────
-
-function triggerLoopReset(): void {
-  if (state.phase !== "playing") return;
-  if (state.timerHandle !== null) {
-    clearInterval(state.timerHandle);
-    state.timerHandle = null;
+/** Storage can throw in private windows; the game still works without it. */
+function safe<T>(fn: () => T): T | null {
+  try {
+    return fn();
+  } catch {
+    return null;
   }
-  state.phase = "resetting";
-  pendingCode = null;
-  ui.closeLaptopModal();
-
-  ui.showReset(state.loop + 1);
-  ui.startParticles();
-
-  setTimeout(() => {
-    resetLoop(state);
-    applyRoomReset();
-    ui.updateLoop(state.loop);
-    ui.updateTimer(state.timeLeft, levelTime());
-    ui.hideReset();
-    state.phase = "playing";
-    startTimer();
-  }, 3200);
 }
 
-function applyRoomReset(): void {
-  ui.setPlayerKey(1, false);
-  ui.setPlayerKey(2, false);
-  ui.resetPaintCounter();
-  ui.hideKey();
-  ui.resetCabinet();
-  ui.hidePhoto();
-  ui.resetLaptop();
-  ui.resetArchive();
-  ui.resetVault();
+// ── connection ────────────────────────────────────────────────────────────────
+
+function send(input: TimeLoopInput): void {
+  room?.send("input", { seq: ++seq, data: input });
 }
 
-// ── level flow ────────────────────────────────────────────────────────────────
-
-function enterLevel(previous: string): void {
-  const def = levelDef(state.level);
-  state.phase = "briefing";
-  applyRoomReset();
-  ui.setLevel(def, LEVELS.length);
-  ui.updateLoop(state.loop);
-  ui.updateTimer(state.timeLeft, def.duration);
-  refreshClues();
-  ui.updateActivePlayer(state.activePlayer);
-  ui.showBrief(def, LEVELS.length, previous);
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
-function beginLevel(): void {
-  ui.hideBrief();
-  state.phase = "playing";
-  startTimer();
+function connect(joined: Room<TimeLoopState>): void {
+  room = joined;
+  seq = 0;
+  view.resetView();
+  safe(() => sessionStorage.setItem(TOKEN_KEY, joined.reconnectionToken));
+
+  joined.onMessage(ServerMessage.Notice, (notice: { text: string }) => ui.toast(notice.text, "warn"));
+  joined.onMessage(ServerMessage.DebugStats, () => {});
+  joined.onMessage(ServerMessage.DebugResult, () => {});
+  joined.onStateChange((state) => view.render(state, joined.sessionId));
+  joined.onLeave(() => {
+    if (room !== joined) return;
+    ui.setLostText("You were disconnected from the room.");
+    ui.setOverlay("lost");
+  });
+
+  ui.showMain("game");
+  if (joined.state?.phase) view.render(joined.state, joined.sessionId);
 }
 
-function completeLevel(): void {
-  const cleared = levelDef(state.level);
-  const loop = state.loop;
-  const left = state.timeLeft;
-  pendingCode = null;
-  ui.closeLaptopModal();
+async function createRoom(): Promise<void> {
+  connect(await client.create<TimeLoopState>(ROOM_NAME, { private: true, name: chosenName() }));
+}
 
-  if (!advanceLevel(state)) {
-    state.phase = "won";
-    ui.showWin(state.totalLoops, left, resetCount(state));
-    return;
+async function joinByCode(raw: string): Promise<void> {
+  const code = normalizeRoomCode(raw);
+  if (!code) throw new Error("A room code is four letters.");
+  const res = await fetch(`${SERVER_URL}${Routes.joinByCode}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  if (res.status === 404) throw new Error("No room with that code.");
+  if (res.status === 409) throw new Error("That room is full.");
+  if (!res.ok) throw new Error(`The server answered ${res.status}.`);
+  const { roomId } = JoinByCodeResponseSchema.parse(await res.json());
+  connect(await client.joinById<TimeLoopState>(roomId, { name: chosenName() }));
+}
+
+async function tryReconnect(): Promise<boolean> {
+  const token = safe(() => sessionStorage.getItem(TOKEN_KEY));
+  if (!token) return false;
+  try {
+    connect(await client.reconnect<TimeLoopState>(token));
+    return true;
+  } catch {
+    safe(() => sessionStorage.removeItem(TOKEN_KEY));
+    return false;
   }
-  enterLevel(`${cleared.name} cleared in loop ${loop} with ${left}s left`);
 }
 
-// ── intro ─────────────────────────────────────────────────────────────────────
+function chosenName(): string {
+  const name = ui.getLobbyName();
+  safe(() => localStorage.setItem(NAME_KEY, name));
+  return name;
+}
+
+// ── intro and lobby ───────────────────────────────────────────────────────────
 
 function showIntroSlide(): void {
   const slide = INTRO[introIndex];
@@ -176,304 +160,66 @@ function showIntroSlide(): void {
 
 function startIntro(): void {
   introIndex = 0;
-  state = makeState();
-  state.phase = "intro";
   showIntroSlide();
-  ui.showIntro();
+  ui.showMain("intro");
 }
 
 function nextIntro(): void {
   if (introIndex >= INTRO.length - 1) {
-    startGame();
+    showLobby();
     return;
   }
   introIndex += 1;
   showIntroSlide();
 }
 
-function startGame(): void {
-  state = makeState();
-  ui.showGame();
-  ui.startRain();
-  enterLevel("");
+function showLobby(): void {
+  ui.setLobbyName(params.name ?? safe(() => localStorage.getItem(NAME_KEY)) ?? "");
+  if (params.room) ui.setLobbyCode(params.room);
+  ui.setLobbyError("");
+  ui.showMain("lobby");
 }
 
-// ── level 1 · the office ──────────────────────────────────────────────────────
-
-function onClickNote(): void {
-  if (state.phase !== "playing") return;
-  if (!learn("blue4", `${playerName()} reads the note: "Blue — 4"`)) {
-    ui.toast("Already noted: Blue — 4");
+async function lobbyAction(action: () => Promise<void>): Promise<void> {
+  ui.setLobbyError("");
+  ui.setLobbyBusy(true);
+  try {
+    await action();
+  } catch (err) {
+    ui.setLobbyError(errorText(err));
+  } finally {
+    ui.setLobbyBusy(false);
   }
 }
 
-function onClickPainting(): void {
-  if (state.phase !== "playing") return;
-  if (state.keyVisible) {
-    ui.toast("The painting is open. The key is below it.");
+async function copyInvite(): Promise<void> {
+  const code = document.getElementById("wait-code")?.textContent ?? "";
+  const link = buildInviteLink(location.href, code);
+  const button = document.getElementById("wait-copy");
+  try {
+    await navigator.clipboard.writeText(link);
+    if (button) button.textContent = "Copied";
+  } catch {
+    if (button) button.textContent = "Copy the link above";
+  }
+  setTimeout(() => {
+    if (button) button.textContent = "Copy invite link";
+  }, 2000);
+}
+
+async function retryConnection(): Promise<void> {
+  if (await tryReconnect()) {
+    ui.setOverlay(null);
     return;
   }
-  state.paintClicks += 1;
-  ui.updatePaintCounter(state.paintClicks);
-
-  if (state.paintClicks < 4) {
-    const msgs = [
-      "shifts slightly.",
-      "swings. Something hides behind it.",
-      "almost there — one more push.",
-    ] as const;
-    ui.toast(`${playerName()}: the painting ${msgs[state.paintClicks - 1] ?? "moves."}`);
-  } else {
-    state.keyVisible = true;
-    ui.showKey();
-    ui.toast(`${playerName()} swings the painting open — a key drops!`, "success");
-  }
-  switchTurn();
+  ui.setLostText("The room is gone or the seat expired. Go back to the lobby to start again.");
 }
 
-function pickUpKey(hide: () => void): void {
-  if (state.phase !== "playing") return;
-  if (state.keyHolder !== null) {
-    ui.toast("The key is already held.");
-    return;
-  }
-  state.keyHolder = state.activePlayer;
-  hide();
-  ui.setPlayerKey(state.activePlayer, true);
-  ui.toast(`${playerName()} picks up the key.`, "success");
-  switchTurn();
-}
+// ── submitting a code ─────────────────────────────────────────────────────────
 
-function onClickCabinet(): void {
-  if (state.phase !== "playing") return;
-  if (state.cabinetOpen) {
-    ui.toast("The wardrobe is open — check the corkboard.");
-    return;
-  }
-  if (state.keyHolder === null) {
-    ui.toast("The wardrobe is locked. Find the key first.", "warn");
-    return;
-  }
-  state.cabinetOpen = true;
-  ui.openCabinet();
-  ui.showPhoto();
-  addClue(state, "findyear");
-  refreshClues();
-  ui.toast(`${playerName()} unlocks the wardrobe — a photograph is pinned inside.`, "success");
-  switchTurn();
-}
-
-function onClickPhoto(): void {
-  if (state.phase !== "playing") return;
-  if (!state.cabinetOpen) {
-    ui.toast("The wardrobe is locked. Can't see anything.", "warn");
-    return;
-  }
-  if (!learn("year1998", `${playerName()}: the photograph shows a year — 1998`)) {
-    ui.toast("The photograph shows a year — 1998");
-  }
-}
-
-function onClickLaptop(): void {
-  if (state.phase !== "playing") return;
-  if (state.laptopDone) {
-    ui.toast("Door is unlocked. Go!", "success");
-    return;
-  }
-  const hint = hasClue(state, "year1998")
-    ? "You have the year. Enter it now."
-    : hasClue(state, "findyear")
-      ? "Find the year on the photograph first."
-      : "Enter the correct 4-digit year to unlock the door.";
-  pendingCode = "laptop";
-  ui.openCodeModal({
-    title: "Access control system",
-    os: "SECURE OS v2.1 — enter year code",
-    hint,
-  });
-}
-
-function onClickDoor(): void {
-  if (state.phase !== "playing") return;
-  if (!state.laptopDone) {
-    ui.toast("The door is locked. Find the code.", "warn");
-    return;
-  }
-  completeLevel();
-}
-
-// ── level 2 · the archive ─────────────────────────────────────────────────────
-
-function onClickCard(): void {
-  if (state.phase !== "playing") return;
-  if (!learn("shelforder", `${playerName()} reads the card: blue, red, green, amber`)) {
-    ui.toast("Already noted: blue, red, green, amber");
-  }
-}
-
-function onClickCalendar(): void {
-  if (state.phase !== "playing") return;
-  if (!learn("day17", `${playerName()} sees a circled date: the 17th`)) {
-    ui.toast("Already noted: the 17th");
-  }
-}
-
-function onClickBook(index: number): void {
-  if (state.phase !== "playing") return;
-  if (state.keyVisible) {
-    ui.toast("The shelf is already open.");
-    return;
-  }
-  const result = pullBook(state, index);
-  if (result === "wrong") {
-    ui.clearBooks();
-    ui.updateShelfCounter(0);
-    ui.flashWrongBook(index);
-    const lost = penalize();
-    ui.toast(`Wrong book. The shelf resets${lost ? ` and you lose ${lost}s` : ""}.`, "warn");
-    return;
-  }
-  ui.setBookPulled(index, true);
-  ui.updateShelfCounter(state.shelfStep);
-  if (result === "solved") {
-    ui.openDrawer();
-    ui.toast(`${playerName()} pulls the last book — a drawer slides open.`, "success");
-  } else {
-    ui.toast(`${playerName()} pulls a book. ${state.shelfStep} of 4.`);
-  }
-  switchTurn();
-}
-
-function onClickFiling(): void {
-  if (state.phase !== "playing") return;
-  if (state.archiveCabinetOpen) {
-    ui.toast("The cabinet is open. Check the folder on top.");
-    return;
-  }
-  if (state.keyHolder === null) {
-    ui.toast("The filing cabinet is locked. Find the key.", "warn");
-    return;
-  }
-  state.archiveCabinetOpen = true;
-  ui.openFiling();
-  ui.toast(`${playerName()} unlocks the cabinet — a case folder.`, "success");
-  switchTurn();
-}
-
-function onClickFolder(): void {
-  if (state.phase !== "playing") return;
-  if (!learn("month04", `${playerName()} opens the folder: filed in month 04`)) {
-    ui.toast("Already noted: month 04");
-  }
-}
-
-function onClickDoor2(): void {
-  if (state.phase !== "playing") return;
-  if (state.archiveDone) {
-    completeLevel();
-    return;
-  }
-  pendingCode = "archive";
-  ui.openCodeModal({
-    title: "Archive door lock",
-    os: "KEYPAD — enter 4 digits",
-    hint: "Four digits: the month, then the day.",
-  });
-}
-
-// ── level 3 · the vault ───────────────────────────────────────────────────────
-
-function onClickPoster(): void {
-  if (state.phase !== "playing") return;
-  if (!learn("switchpattern", `${playerName()} studies the poster: up, down, up, up`)) {
-    ui.toast("Already noted: up, down, up, up");
-  }
-}
-
-function onClickSwitch(index: number): void {
-  if (state.phase !== "playing") return;
-  if (state.powered) {
-    ui.toast("The power is already on.");
-    return;
-  }
-  const powered = toggleSwitch(state, index);
-  ui.setSwitch(index, state.switches[index] === true);
-  if (powered) {
-    ui.setPower(true);
-    ui.toast(`${playerName()} restores power. The terminal wakes up.`, "success");
-  }
-  switchTurn();
-}
-
-function onClickTerminal(): void {
-  if (state.phase !== "playing") return;
-  if (!state.powered) {
-    ui.toast("The terminal is dead. Restore the power.", "warn");
-    return;
-  }
-  if (!learn("safecode", `${playerName()}: safe code is the photo year, reversed`)) {
-    ui.toast("Safe code: the photo year, reversed");
-  }
-}
-
-function onClickSafe(): void {
-  if (state.phase !== "playing") return;
-  if (state.safeOpen) {
-    ui.toast("The safe is open. Take the hatch.");
-    return;
-  }
-  if (!state.powered) {
-    ui.toast("The safe keypad is dead. Restore the power.", "warn");
-    return;
-  }
-  pendingCode = "vault";
-  ui.openCodeModal({
-    title: "Vault safe",
-    os: "SAFE — enter 4 digits",
-    hint: hasClue(state, "safecode") ? "The photo year, reversed." : "The terminal may know.",
-  });
-}
-
-function onClickDoor3(): void {
-  if (state.phase !== "playing") return;
-  if (!state.safeOpen) {
-    ui.toast("The hatch is sealed. Open the safe.", "warn");
-    return;
-  }
-  completeLevel();
-}
-
-// ── code entry ────────────────────────────────────────────────────────────────
-
-function onCodeSolved(kind: CodeKind): void {
-  if (kind === "laptop") {
-    state.laptopDone = true;
-    ui.setLaptopDone();
-  } else if (kind === "archive") {
-    state.archiveDone = true;
-    ui.setArchiveDone();
-  } else {
-    state.safeOpen = true;
-    ui.openSafe();
-  }
-}
-
-function onSubmitCode(): void {
-  const kind = pendingCode;
-  if (kind === null) return;
-  if (checkCode(kind, ui.getCodeInput())) {
-    pendingCode = null;
-    ui.setModalStatus(true, "Access granted");
-    onCodeSolved(kind);
-    setTimeout(() => {
-      ui.closeLaptopModal();
-      ui.toast("Access granted — the way out is open.", "success");
-      switchTurn();
-    }, 1200);
-    return;
-  }
-  const lost = penalize();
-  ui.setModalStatus(false, lost ? `Incorrect code · −${lost}s` : "Incorrect code");
+function submitCode(): void {
+  const kind = view.pendingCodeKind();
+  if (kind) send({ type: "code", kind, value: ui.getCodeInput() });
 }
 
 // ── event bindings ────────────────────────────────────────────────────────────
@@ -482,51 +228,50 @@ function bind(id: string, handler: () => void): void {
   document.getElementById(id)?.addEventListener("click", handler);
 }
 
-function bindKey(id: string, handler: () => void): void {
+function bindEnter(id: string, handler: () => void): void {
   document.getElementById(id)?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") handler();
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  ui.startRain();
+
   bind("btn-start", startIntro);
   bind("intro-next", nextIntro);
-  bind("intro-skip", startGame);
-  bind("brief-go", beginLevel);
-  bind("btn-restart", ui.showStart);
+  bind("intro-skip", showLobby);
 
-  bind("obj-note", onClickNote);
-  bind("obj-painting", onClickPainting);
-  bind("obj-key", () => pickUpKey(ui.hideKey));
-  bind("obj-cabinet", onClickCabinet);
-  bind("obj-photo", onClickPhoto);
-  bind("obj-laptop", onClickLaptop);
-  bind("obj-door", onClickDoor);
+  bind("lobby-create", () => void lobbyAction(createRoom));
+  bind("lobby-join", () => void lobbyAction(() => joinByCode(ui.getLobbyCode())));
+  bindEnter("lobby-code", () => void lobbyAction(() => joinByCode(ui.getLobbyCode())));
+  bind("wait-copy", () => void copyInvite());
 
-  bind("obj-card", onClickCard);
-  bind("obj-calendar", onClickCalendar);
-  for (let i = 0; i < 4; i++) bind(`obj-book-${i}`, () => onClickBook(i));
-  bind("obj-key2", () => pickUpKey(ui.hideKey2));
-  bind("obj-filing", onClickFiling);
-  bind("obj-folder", onClickFolder);
-  bind("obj-door2", onClickDoor2);
+  bind("brief-go", () => send({ type: "ready" }));
+  bind("btn-restart", () => send({ type: "restart" }));
 
-  bind("obj-poster", onClickPoster);
-  for (let i = 0; i < 4; i++) bind(`obj-sw-${i}`, () => onClickSwitch(i));
-  bind("obj-terminal", onClickTerminal);
-  bind("obj-safe", onClickSafe);
-  bind("obj-door3", onClickDoor3);
+  bind("lost-retry", () => void retryConnection());
+  bind("lost-lobby", () => {
+    room = null;
+    safe(() => sessionStorage.removeItem(TOKEN_KEY));
+    ui.setOverlay(null);
+    showLobby();
+  });
 
-  bind("modal-cancel", ui.closeLaptopModal);
-  bind("modal-close", ui.closeLaptopModal);
-  bind("modal-submit", onSubmitCode);
-  bindKey("code-input", onSubmitCode);
+  for (const [id, target] of Object.entries(TAPS)) {
+    bind(id, () => send({ type: "interact", target }));
+  }
 
+  bind("modal-cancel", ui.closeCodeModal);
+  bind("modal-close", ui.closeCodeModal);
+  bind("modal-submit", submitCode);
+  bindEnter("code-input", submitCode);
   document.getElementById("code-input")?.addEventListener("keydown", (e) => {
-    if ((e as KeyboardEvent).key === "Escape") ui.closeLaptopModal();
+    if ((e as KeyboardEvent).key === "Escape") ui.closeCodeModal();
+  });
+  document.getElementById("modal-laptop")?.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).id === "modal-laptop") ui.closeCodeModal();
   });
 
-  document.getElementById("modal-laptop")?.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).id === "modal-laptop") ui.closeLaptopModal();
-  });
+  // A refresh keeps the seat; a shared invite link goes straight to the intro and then the lobby.
+  void tryReconnect();
 });
