@@ -15,14 +15,35 @@ export const ServerMessage = {
   DebugResult: "debug:result",
   /** Short text shown to players (e.g. "Room is full", "Server restarting"). */
   Notice: "notice",
+  /** Server-side tick timing, sent once a second outside production for the debug overlay. */
+  DebugStats: "debug:stats",
 } as const;
 
 /** HTTP routes served next to the game. */
 export const Routes = {
   health: "/health",
-  bugReport: "/api/bug-report",
+  bugReports: "/api/bug-reports",
+  bugReportById: (id: string) => `/api/bug-reports/${encodeURIComponent(id)}`,
   replay: (roomId: string) => `/api/replays/${encodeURIComponent(roomId)}`,
+  stats: "/api/stats",
+  joinByCode: "/api/rooms/join",
 } as const;
+
+/** Body of `POST /api/rooms/join`. */
+export const JoinByCodeRequestSchema = z.object({ code: z.string() });
+export type JoinByCodeRequest = z.infer<typeof JoinByCodeRequestSchema>;
+
+/** Reply to `POST /api/rooms/join`: join it with `client.joinById(roomId)`. */
+export const JoinByCodeResponseSchema = z.object({ roomId: z.string() });
+export type JoinByCodeResponse = z.infer<typeof JoinByCodeResponseSchema>;
+
+export const DebugStatsSchema = z.object({
+  tick: z.number().int().nonnegative(),
+  tickMsAvg: z.number().nonnegative(),
+  tickMsP95: z.number().nonnegative(),
+  lateTicks: z.number().int().nonnegative(),
+});
+export type DebugStats = z.infer<typeof DebugStatsSchema>;
 
 /**
  * Envelope for every input message. `seq` increases by one per input from a client, so
@@ -68,7 +89,7 @@ export const NetConditionsSchema = z.object({
 });
 export type NetConditions = z.infer<typeof NetConditionsSchema>;
 
-/** Body of `POST /api/bug-report`, sent by the in-game Report bug button (F8). */
+/** Body of `POST /api/bug-reports`, sent by the in-game Report bug button (F8). */
 export const BugReportSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(5000).default(""),
@@ -88,3 +109,7 @@ export const BugReportSchema = z.object({
   screenshot: z.string().startsWith("data:image/").nullable(),
 });
 export type BugReport = z.infer<typeof BugReportSchema>;
+
+/** Reply to `POST /api/bug-reports`. `url` is where the report (screenshot, replay) can be fetched. */
+export const BugReportCreatedSchema = z.object({ id: z.uuid(), url: z.string() });
+export type BugReportCreated = z.infer<typeof BugReportCreatedSchema>;

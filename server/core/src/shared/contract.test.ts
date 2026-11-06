@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  BugReportCreatedSchema,
   BugReportSchema,
   DebugCommandSchema,
+  DebugStatsSchema,
   HealthResponseSchema,
   isDebugEnabled,
+  JoinByCodeResponseSchema,
   REPLAY_VERSION,
   ReplaySchema,
   Routes,
   SeededRandom,
+  ServerMessage,
 } from "./index.ts";
 
 describe("health", () => {
@@ -70,6 +74,7 @@ describe("replay", () => {
       seed: 42,
       tickRate: 30,
       configVersion: "1",
+      config: { version: "1" },
       sha: "abc123",
       scenario: null,
       startedAt: "2026-11-06T10:00:00Z",
@@ -85,9 +90,58 @@ describe("replay", () => {
   });
 });
 
+describe("replay v2", () => {
+  const base = {
+    version: REPLAY_VERSION,
+    game: "sample",
+    roomId: "r1",
+    seed: 42,
+    tickRate: 30,
+    configVersion: "1",
+    sha: "abc123",
+    scenario: null,
+    startedAt: "2026-11-06T10:00:00Z",
+    events: [
+      { type: "join", tick: 0, playerId: "p1" },
+      { type: "drop", tick: 3, playerId: "p1" },
+      { type: "reconnect", tick: 7, playerId: "p1" },
+    ],
+    final: null,
+  };
+
+  it("accepts drop and reconnect events and requires config", () => {
+    expect(REPLAY_VERSION).toBe(2);
+    const replay = ReplaySchema.parse({ ...base, config: { version: "1" } });
+    expect(replay.events.map((e) => e.type)).toEqual(["join", "drop", "reconnect"]);
+    expect(replay.truncated).toBe(false);
+    expect(ReplaySchema.safeParse(base).success).toBe(false);
+  });
+});
+
 describe("routes", () => {
   it("encodes room ids in replay URLs", () => {
     expect(Routes.replay("a/b")).toBe("/api/replays/a%2Fb");
+  });
+
+  it("encodes bug report ids and exposes the new routes", () => {
+    expect(Routes.bugReportById("a b")).toBe("/api/bug-reports/a%20b");
+    expect(Routes.bugReports).toBe("/api/bug-reports");
+    expect(Routes.stats).toBe("/api/stats");
+    expect(Routes.joinByCode).toBe("/api/rooms/join");
+  });
+});
+
+describe("server messages", () => {
+  it("validates debug stats and rejects negative late ticks", () => {
+    expect(ServerMessage.DebugStats).toBe("debug:stats");
+    const ok = { tick: 10, tickMsAvg: 0.4, tickMsP95: 1.2, lateTicks: 0 };
+    expect(DebugStatsSchema.parse(ok)).toEqual(ok);
+    expect(DebugStatsSchema.safeParse({ ...ok, lateTicks: -1 }).success).toBe(false);
+  });
+
+  it("validates join-by-code and bug-report-created responses", () => {
+    expect(JoinByCodeResponseSchema.parse({ roomId: "abc" }).roomId).toBe("abc");
+    expect(BugReportCreatedSchema.safeParse({ id: "nope", url: "/x" }).success).toBe(false);
   });
 });
 

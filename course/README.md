@@ -24,6 +24,19 @@ Every issue and pull request carries exactly one team label:
 | `platform`          | the platform team | `server/`       |
 | `team-instructor`   | the instructors   | `course/`       |
 
+## Project boards
+
+Every team has its own GitHub Project with the issues and pull requests that carry its label. Issues and PRs are added to the boards by their team label, so label your work correctly.
+
+| Board | Contents |
+|---|---|
+| [team-1](https://github.com/users/ferenc-munde/projects/3) | issues and PRs labeled `team-1` |
+| [team-2](https://github.com/users/ferenc-munde/projects/4) | issues and PRs labeled `team-2` |
+| [team-3](https://github.com/users/ferenc-munde/projects/5) | issues and PRs labeled `team-3` |
+| [team-4](https://github.com/users/ferenc-munde/projects/6) | issues and PRs labeled `team-4` |
+| [platform](https://github.com/users/ferenc-munde/projects/7) | issues and PRs labeled `platform` |
+| [All teams](https://github.com/users/ferenc-munde/projects/8) | every issue and PR; filter by team with `label:team-2` etc. |
+
 ## Tracking progress
 
 We track progress with GitHub issues and pull requests.
@@ -33,7 +46,9 @@ We track progress with GitHub issues and pull requests.
    - Describe the **goal** and the **done when** criteria (a short checklist).
    - Add your team label and assign the issue to whoever works on it.
 2. **Every pull request closes an issue.** Put `Closes #<issue number>` in the PR description, so the issue is closed automatically when the PR is merged.
-   - New PRs start from the [pull request template](../.github/pull_request_template.md). Fill in every section (linked issue, team, summary, how to test, screenshots) and tick the checklist. Don't delete or rename the headings: the evaluation reads them.
+   - Every PR follows the template for its type (feature, bug, docs, chore, refactor, release or sync) in [`.github/PULL_REQUEST_TEMPLATE/`](../.github/PULL_REQUEST_TEMPLATE/). Don't pick it yourself: `pnpm workflow:classify --kind pr` chooses the template, team label and base branch, the `fill-pr` agent skill fills it in, and `pnpm check:pr` (also run by CI) validates it.
+   - Fill in every section, in order, and tick the checklist. Write `None` if a section does not apply. Don't delete or rename the headings: the checks and the evaluation read them.
+   - Details: [Templates, classification and checks](../CLAUDE.md#templates-classification-and-checks) in `CLAUDE.md`.
    - The full workflow (branch names, labels, reviews) is in [AGENTS.md](../AGENTS.md).
 
 ## Evaluation

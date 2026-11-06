@@ -50,6 +50,10 @@
       "owner": "platform"
     },
     {
+      "path": ".claude/**",
+      "owner": "platform"
+    },
+    {
       "path": "**",
       "owner": "shared"
     }

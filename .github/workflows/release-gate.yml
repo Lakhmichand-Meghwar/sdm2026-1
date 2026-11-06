@@ -1,0 +1,47 @@
+# The release gate: stops anything on main from reaching production by itself. Every pull request into
+# `prod` must be a deliberate release from `main`, with CI green on the exact commit and a rollback plan
+# written down (server/tooling/check-release.mjs). The job is named "release gate"; once the rulesets in
+# .github/rulesets/ are imported, `prod` cannot be merged into while it is red. Owner: platform team.
+name: Release gate
+
+on:
+  pull_request:
+    branches: [prod]
+    # CI results arrive after the PR is opened, so re-run when the description is edited or new commits land.
+    types: [opened, edited, synchronize, reopened, ready_for_review, converted_to_draft]
+
+concurrency:
+  group: release-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  release-gate:
+    name: release gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The gate script always comes from main (the reviewed branch), never from the PR being judged.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # The commit being released is the PR's head. Its check runs say whether CI passed on it.
+      - name: Read the CI results for the commit being released
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: gh api "repos/$REPO/commits/$HEAD_SHA/check-runs?per_page=100" > "$RUNNER_TEMP/check-runs.json"
+
+      # The PR text reaches the script through the event file, never through a shell expression.
+      - name: Release gate
+        run: node server/tooling/check-release.mjs --event "$GITHUB_EVENT_PATH" --checks "$RUNNER_TEMP/check-runs.json"

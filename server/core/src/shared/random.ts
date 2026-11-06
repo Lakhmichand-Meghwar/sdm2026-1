@@ -41,5 +41,5 @@ export class SeededRandom {
 
 /** A fresh random seed for a new room. Only the seed itself may come from Math.random(). */
 export function newSeed(): number {
-  return Math.floor(Math.random() * 2 ** 31);
+  return Math.floor(Math.random() * 2 ** 31); // determinism-ok: the seed is chosen once, before the simulation starts
 }

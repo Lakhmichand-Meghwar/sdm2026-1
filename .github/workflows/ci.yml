@@ -44,6 +44,10 @@ jobs:
       - name: Setup check
         run: pnpm check:setup --ci
 
+      # Each game's config/game.json against its config schema. Needs the installed dependencies.
+      - name: Game config check
+        run: pnpm check:config
+
       - name: Lint
         run: pnpm lint
 

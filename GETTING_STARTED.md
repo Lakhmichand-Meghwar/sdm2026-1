@@ -28,6 +28,7 @@ pnpm dev
 ```
 
 - `pnpm install` stops with a clear message if your Node version is wrong.
+- Run `git config commit.template .gitmessage` once. Your commit editor then starts with the required message format (`type(scope): subject` plus `Refs #<issue>`), which `pnpm check:commit` and CI check.
 - `pnpm check:setup` checks your machine (Node and pnpm versions, dependencies, line endings, file names, free ports) and tells you how to fix anything that fails.
 - `pnpm dev` runs the template game: open <http://localhost:5173>. You should see **Server OK**. Stop it with Ctrl+C.
 
@@ -98,10 +99,10 @@ team-N/<issue>-<description>  →  feature/team-N  →  main  →  prod
 4. **Check before you push:**
 
    ```bash
-   pnpm lint
-   pnpm typecheck
-   pnpm test
+   pnpm preflight
    ```
+
+   It runs lint, typecheck, tests and the build, then checks your branch name, base branch and issue, folder ownership, commit messages, committed files, secrets and docs links, and says how to fix anything that fails. CI runs the same checks on your PR.
 
 5. **Open a pull request into `feature/team-N`.** Title `[team-N] …`, the same label as the issue, `Closes #42` in the description, and every section of the PR template filled in.
 6. **Wait for CI.** The checks run on Ubuntu, Windows and macOS. All three must be green.
@@ -114,7 +115,7 @@ The course is AI first, so expect agents to do much of the work. Point them at t
 
 - **Claude Code** reads [CLAUDE.md](CLAUDE.md) automatically, plus [server/CLAUDE.md](server/CLAUDE.md) when it works in `server/`.
 - **Other agents** (Codex and others) read `AGENTS.md`, which points to `CLAUDE.md`.
-- Ask agents to run `pnpm lint`, `pnpm typecheck` and `pnpm test` before they say they're done, and to follow the issue → branch → PR workflow.
+- Ask agents to run `pnpm preflight:quick` after each change and `pnpm preflight` before they say they're done, and to follow the issue → branch → PR workflow.
 - Agents follow the same ownership rules as people: they work only in your team's folder.
 
 ## 7. Troubleshooting

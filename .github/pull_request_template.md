@@ -40,7 +40,7 @@ team-
 - [ ] The title starts with `[<team-label>]`
 - [ ] The branch is named `<team-label>/<issue-number>-<short-description>`
 - [ ] Changes only touch my own team's folder (see AGENTS.md), or the issue explains why not
-- [ ] Commits reference the issue (`Refs #N`)
+- [ ] Commits follow Conventional Commits and reference the issue (`Refs #N`)
 - [ ] No secrets, credentials, build output or large binaries are committed
 - [ ] The base branch is correct: `feature/team-N` for a work branch, `main` for a feature branch, `prod` for a release
 - [ ] The branch is up to date with its base branch
