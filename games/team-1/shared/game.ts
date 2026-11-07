@@ -140,7 +140,7 @@ function newGame(ctx: Ctx): void {
   const s = ctx.state;
   s.clues1.clear();
   s.clues2.clear();
-  s.totalLoops = 0;
+  s.resets = 0;
   s.finalTime = 0;
   beginLevel(ctx, 1, "");
 }
@@ -150,7 +150,6 @@ function completeLevel(ctx: Ctx): void {
   const cleared = levelInfo(s.level);
   const loop = s.loop;
   const left = s.timeLeft;
-  s.totalLoops += 1;
   if (s.level >= LEVEL_COUNT) {
     s.finalTime = left;
     s.phase = "won";
@@ -189,7 +188,7 @@ function tickClock(ctx: Ctx): void {
     if (s.countdown > 0) s.countdown -= 1;
     if (s.countdown === 0) {
       s.loop += 1;
-      s.totalLoops += 1;
+      s.resets += 1;
       s.timeLeft = levelConfig(ctx).duration;
       s.subTick = 0;
       clearRoom(ctx);
@@ -304,7 +303,7 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
         for (const slotId of [1, 2] as const) {
           if (!hasClue(ctx, slotId, "findyear")) journal(ctx, slotId).push("findyear");
         }
-        say(ctx, "success", `${name} unlocks the wardrobe. A photograph is pinned inside.`);
+        say(ctx, "success", `${name} unlocks the wardrobe. A photograph appears on the corkboard.`);
       }
       return;
     case "photo":

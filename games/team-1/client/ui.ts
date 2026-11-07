@@ -121,8 +121,8 @@ export function setResetLoop(nextLoop: number): void {
   setText("reset-loop-num", `Loop ${nextLoop}`);
 }
 
-export function setWin(totalLoops: number, timeLeft: number, resets: number): void {
-  setText("stat-loops", String(totalLoops));
+export function setWin(resets: number, timeLeft: number): void {
+  setText("stat-resets", String(resets));
   setText("stat-time", `${timeLeft}s`);
   setText(
     "win-msg",

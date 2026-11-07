@@ -45,7 +45,8 @@ export const TimeLoopState = BaseState.extend(
     phase: t.string().default("waiting"),
     level: t.uint8().default(1),
     loop: t.uint8().default(1),
-    totalLoops: t.uint8().default(0),
+    /** How many times the clock ran out, over the whole game. */
+    resets: t.uint8().default(0),
     /** Seconds left in this loop. */
     timeLeft: t.uint16().default(0),
     subTick: t.uint16().default(0),
