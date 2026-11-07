@@ -8,6 +8,7 @@ import {
   type Tool,
   tickMs,
 } from "../shared/escape.ts";
+import { playFootsteps, unlockAudio, walkers } from "./footsteps.ts";
 import "./style.css";
 
 const endpoint =
@@ -201,6 +202,7 @@ function render(state: EscapeSnapshot) {
     selectStation("note");
     setDrawer(false);
   }
+  for (const id of walkers(snapshot?.patients, state.patients)) playFootsteps(id === room?.sessionId);
   snapshot = state;
   const encounter = state.ghostSeconds !== null;
   const active = state.phase === "running";
@@ -272,6 +274,8 @@ function move(station: Station) {
   send({ type: "move", station });
 }
 
+document.addEventListener("pointerdown", unlockAudio);
+document.addEventListener("keydown", unlockAudio);
 create.addEventListener("click", () => void connect());
 lobby.addEventListener("submit", (event) => {
   event.preventDefault();
