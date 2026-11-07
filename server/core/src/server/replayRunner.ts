@@ -39,7 +39,8 @@ export function runReplay<S extends BaseState, I, C extends RoomSettings>(
     advanceTo(event.tick);
     switch (event.type) {
       case "join":
-        sim.join(event.playerId, event.options);
+        // Replays recorded before guests existed have no guest; the schema reads it as "".
+        sim.join(event.playerId, event.options, event.guest ?? "");
         break;
       case "leave":
         sim.leave(event.playerId);

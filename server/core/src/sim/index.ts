@@ -14,6 +14,12 @@ export const Seat = schema(
     connected: t.boolean().default(true),
     /** Last input seq applied for this seat; the client reconciles predictions against it. */
     lastSeq: t.uint32().default(0),
+    /**
+     * The player's guest fingerprint: 12 hex characters, the same for every tab and reload of one
+     * browser in this game (another game gets a different one), or "" when the client sent no valid
+     * guest ID. Public; never the raw guest ID. A hint, not authentication (see `JoinInfo.guest`).
+     */
+    guest: t.string().default(""),
   },
   "Seat",
 );
@@ -62,6 +68,18 @@ export interface TickInput<I> {
   data: I;
 }
 
+/** What the room base knows about a joining player, besides the game's own join options. */
+export interface JoinInfo {
+  /**
+   * Guest fingerprint (see `Seat.guest`): the same value for the same browser across tabs, reloads and
+   * expired seats in this game, or "" when the client sent none. Use it as a hint to recognise a
+   * returning player, not as authentication: other games on the same origin can read the stored ID
+   * and a client can send a fresh one to avoid being recognised, so never use it to hand over a seat,
+   * score or ownership. One guest can hold several seats at once (two tabs).
+   */
+  readonly guest: string;
+}
+
 /** Returns output text for the debug console. Throw an Error to report a failure. */
 export type DebugCommandHandler<S, C> = (ctx: SimContext<S, C>, args: string[]) => string;
 
@@ -76,7 +94,11 @@ export interface GameDefinition<S extends BaseState, I, C extends RoomSettings> 
   /** Used by the `set` debug command to check a changed config. */
   configSchema: z.ZodType<C>;
   init(ctx: SimContext<S, C>): void;
-  join(ctx: SimContext<S, C>, playerId: string, options: Record<string, unknown>): void;
+  /**
+   * A player took a seat. `options` passed `joinOptionsSchema` (the base removes `guestId` first, so
+   * don't declare it). `info.guest` is the guest fingerprint, also on `ctx.state.seats.get(playerId)`.
+   */
+  join(ctx: SimContext<S, C>, playerId: string, options: Record<string, unknown>, info: JoinInfo): void;
   leave(ctx: SimContext<S, C>, playerId: string): void;
   /** Advance one tick. `inputs` are in arrival order. Mutate `ctx.state` in place. */
   step(ctx: SimContext<S, C>, inputs: TickInput<I>[]): void;

@@ -1,0 +1,113 @@
+# Keeps every feature/team-N close to main (pnpm branches:sync, issue #222): opens a sync PR from main
+# into each feature branch that is behind it, so teams build on the current platform fixes, git hooks
+# and commands. See "Branches" in CLAUDE.md. The PRs refer to the standing issue in SYNC_ISSUE.
+#
+# - On every push to main, every hour as a safety net (GitHub may delay scheduled runs; minute 17 avoids
+#   the busy top and half of the hour), and on demand.
+# - It only opens missing PRs. A sync PR's head is main itself, so an open one picks up new commits on
+#   main by itself. Branches that are up to date or already have an open sync PR are skipped.
+# - It never merges, pushes or force-pushes. The team reviews and merges its sync PR.
+#
+# Token: GitHub does not start other workflows (CI, Workflow checks) for PRs opened with the built-in
+# GITHUB_TOKEN. With the SYNC_TOKEN secret set (a fine-grained PAT on this repository only, with
+# Pull requests: read and write, Issues: read, Contents: read) the PRs get their checks at once.
+# Without it the run falls back to github.token and says so in the job summary; that fallback also
+# needs "Allow GitHub Actions to create and approve pull requests" on in the repository settings.
+#
+# Security: only push, schedule and workflow_dispatch start it, so it always runs main's reviewed code,
+# never a PR's. The checkout keeps no credentials (the repository is public, so fetching needs none);
+# the token reaches gh only through GH_TOKEN. Owner: platform team.
+name: Branches sync
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+# Queue, never cancel: a cancelled run could stop between opening one team's PR and the next. Runs
+# that wait collapse into one, which is fine because every run reads the current state of GitHub.
+concurrency:
+  group: branches-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # gh pr list / gh pr create, and adding the platform label to the PR it opens.
+  pull-requests: write
+  # Reads the standing issue (open? labelled platform?).
+  issues: read
+
+jobs:
+  sync:
+    name: open sync PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Forks have no feature branches to sync, and their scheduled runs would only fail.
+    if: github.repository == 'nd2003/sdm2026-1'
+    steps:
+      # A shallow checkout is enough: branches-sync.mjs fetches the full history of main and the
+      # feature branches itself, because the commit counts and conflict predictions need it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # The command has no dependencies, so there is no install step. Everything it reads comes from
+      # git and the GitHub API, never from a PR's text, and the inputs reach the shell as env vars.
+      - name: Open sync PRs
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
+          GH_REPO: ${{ github.repository }}
+          HAS_SYNC_TOKEN: ${{ secrets.SYNC_TOKEN != '' }}
+          # The standing issue the sync PRs refer to; the SYNC_ISSUE repository variable overrides it.
+          SYNC_ISSUE: ${{ vars.SYNC_ISSUE || '221' }}
+        run: |
+          out="$RUNNER_TEMP/branches-sync.json"
+          err="$RUNNER_TEMP/branches-sync.err"
+          set +e
+          node server/tooling/workflow/branches-sync.mjs --issue "$SYNC_ISSUE" --json > "$out" 2> "$err"
+          code=$?
+          set -e
+          cat "$err" >&2
+          {
+            echo "## Sync PRs from main (refer to #$SYNC_ISSUE)"
+            echo
+            if [ -s "$out" ]; then
+              # A refused run (e.g. the issue isn't labelled platform) reports problems but no branches.
+              if [ "$(jq '.branches // [] | length' "$out")" -gt 0 ]; then
+                echo "| Branch | Status | Behind | Conflicting files | PR |"
+                echo "|---|---|---|---|---|"
+                jq -r '.branches[] | "| `\(.branch)` | \(.status) | \(.behind // "") | \((.conflicts // []) | length) | \(.url // "") |"' "$out"
+                echo
+              fi
+              jq -r '"\(.summary)", "", ((.problems // [])[] | "- **Problem:** \(.message)"), ((.warnings // [])[] | "- Warning: \(.)")' "$out"
+            else
+              echo "branches-sync stopped with exit code $code before it could report (see the log):"
+              echo
+              echo '```'
+              cat "$err"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$HAS_SYNC_TOKEN" != "true" ]; then
+            opened=0
+            [ -s "$out" ] && opened=$(jq '[(.branches // [])[] | select(.status == "opened")] | length' "$out")
+            echo "::warning title=SYNC_TOKEN is not set::This run used GITHUB_TOKEN, so CI and the Workflow checks do not start on the sync PRs it opens. Ask nd2003 to add SYNC_TOKEN (see #161)."
+            {
+              echo
+              echo '> [!WARNING]'
+              echo '> **`SYNC_TOKEN` is not set**, so this run used the built-in `GITHUB_TOKEN`.'
+              echo "> GitHub does not start CI or the Workflow checks on pull requests opened with it ($opened opened in this run)."
+              echo '> Their checks only start after the next push to `main` (which updates every open sync PR), or when someone closes and reopens the PR.'
+              echo '> The fallback also needs *Allow GitHub Actions to create and approve pull requests* on in the repository settings.'
+              echo '>'
+              echo '> **Fix:** `nd2003` adds a `SYNC_TOKEN` Actions secret: a fine-grained PAT for this repository only, with Pull requests: read and write, Issues: read, Contents: read (see #161).'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$code"

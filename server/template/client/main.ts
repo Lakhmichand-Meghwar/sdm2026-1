@@ -14,6 +14,7 @@ import {
   createFrameMeter,
   createLogBuffer,
   formatServerStats,
+  getGuestId,
   inspectState,
   NO_NET_CONDITIONS,
   normalizeRoomCode,
@@ -60,6 +61,8 @@ const params = readClientParams(location.search);
 // ?lag=300&jitter=50&loss=5 simulates a bad connection; null when none is set.
 const netConditions = readNetConditions(location.search);
 const client = new Client(SERVER_URL);
+/** Same in every tab and after a reload: the room shows its fingerprint as `seats[id].guest`. */
+const guestId = getGuestId();
 // Recent console output goes into F8 bug reports.
 const logs = createLogBuffer();
 logs.captureConsole();
@@ -94,7 +97,7 @@ async function joinByCode(raw: string): Promise<Room<SampleState>> {
   });
   if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
   const { roomId } = JoinByCodeResponseSchema.parse(await res.json());
-  return client.joinById<SampleState>(roomId, { name: params.name ?? "player" });
+  return client.joinById<SampleState>(roomId, { name: params.name ?? "player", guestId });
 }
 
 function showLobby(health: BuildInfo, error?: string): void {
@@ -107,7 +110,7 @@ function showLobby(health: BuildInfo, error?: string): void {
   const fail = (err: unknown) => showLobby(health, err instanceof Error ? err.message : String(err));
   app.querySelector("#create")?.addEventListener("click", () => {
     client
-      .create<SampleState>(ROOM_NAME, { private: true, name: params.name ?? "player" })
+      .create<SampleState>(ROOM_NAME, { private: true, name: params.name ?? "player", guestId })
       .then((room) => play(room, health), fail);
   });
   app.querySelector("#join")?.addEventListener("click", () => {
@@ -238,6 +241,8 @@ function play(room: Room<SampleState>, health: BuildInfo): void {
         frameMs,
       },
       {
+        // The public fingerprint of guestId: two tabs of this browser show the same value.
+        guest: state.seats?.get(room.sessionId)?.guest || "-",
         ...(serverStats ? { server: formatServerStats(serverStats) } : {}),
         // State inspector: the room's live state, pickups summarised.
         ...inspectState(state.toJSON(), { summarise: ["pickups"], maxLines: 16 }),

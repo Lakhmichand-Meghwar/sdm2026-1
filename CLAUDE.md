@@ -48,7 +48,10 @@ team-N/<issue>-<description>  →  feature/team-N  →  main  →  prod
 1. **Work branch → `feature/team-N`.** One pull request per issue, reviewed by a teammate. Everything your team is building lands here first, so one team's unfinished work never breaks another team.
 2. **`feature/team-N` → `main`.** Only when CI is green for the feature branch. The CI/CD checks are owned by P1 and described in [server/ARCHITECTURE.md](server/ARCHITECTURE.md) as they are added.
 3. **`main` → `prod`.** A release pull request, opened when `main` works and is ready to go live.
-4. **Stay current.** After your feature branch has been merged into `main`, merge `main` back into `feature/team-N` before starting the next piece of work.
+4. **Stay current.** `feature/team-N` must not fall behind `main`, or your team misses platform fixes, git hooks and commands. You don't have to remember this: after every merge into `main` (and every hour) the "Branches sync" workflow opens a **sync PR** from `main` into each `feature/team-N` that is behind it, labelled `platform` and referring to the standing sync issue. It only opens a PR when none is open; an open sync PR picks up new commits on `main` by itself.
+   - **Your team reviews and merges its sync PR**, like any other PR into your feature branch, preferably before starting the next piece of work. Nobody else merges it for you.
+   - **If it conflicts**, the PR's summary lists the files. GitHub can't resolve them on the PR itself (that would commit to `main`), so resolve them on your side, like `pnpm sync` does for a work branch: open a team issue with the line `Cross-team: brings main into feature/team-N` (the merge touches other owners' files), branch `team-N/<issue>-…` from `origin/feature/team-N`, run `git merge origin/main`, fix the conflicts, commit, and open that branch as a PR into `feature/team-N`. Once it is merged, GitHub marks the sync PR as merged too; if `main` moved on in the meantime, the sync PR stays open with only the newer commits. Or ask platform for help in the sync PR.
+   - The workflow needs a `SYNC_TOKEN` secret (see [server/CLAUDE.md](server/CLAUDE.md#branch-release-and-environment-commands)). Until a repository admin adds it, CI doesn't start on a new sync PR until the next merge into `main` updates it.
 
 Platform work (`server/`, CI, Railway) and instructor work (`course/`, workflow files) don't belong to a game team, so their branches (`platform/<issue>-…`, `team-instructor/<issue>-…`) open pull requests straight into `main`.
 
@@ -184,7 +187,7 @@ The repo has only two kinds of labels; there are no type, size or priority label
 | `team-1` … `team-4`, `platform`, `team-instructor` | exactly one on every issue and PR | you |
 | `stackpile`, `waiting-on.author`, `waiting-on.review`, `waiting-on.merge` | on open PRs only | the labeller |
 
-The **labeller** (`pnpm labels:prs`, the "PR labels" workflow) runs every 10 minutes and whenever a PR or review changes. It only touches these four labels, and removes them when a PR is closed or merged:
+The **labeller** (`pnpm labels:prs`, the "PR labels" workflow) relabels every PR whenever any PR or review changes, and every 10 minutes as a fallback. It only touches these four labels, and removes them when a PR is closed or merged:
 
 - `stackpile`: the PR is stacked on another PR (its base isn't `main`, `prod` or a `feature/team-N` branch). It merges after the PR below it.
 - Exactly one waiting label, checked in this order:

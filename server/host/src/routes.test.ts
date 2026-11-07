@@ -19,8 +19,8 @@ const replay = (roomId: string): Replay => ({
   scenario: null,
   startedAt: "t",
   events: [
-    { type: "join", tick: 0, playerId: "p1", options: { name: "Ada" } },
-    { type: "join", tick: 3, playerId: "p2", options: { name: "Bo" } },
+    { type: "join", tick: 0, playerId: "p1", options: { name: "Ada" }, guest: "" },
+    { type: "join", tick: 3, playerId: "p2", options: { name: "Bo" }, guest: "" },
   ],
   code: "",
   failure: null,

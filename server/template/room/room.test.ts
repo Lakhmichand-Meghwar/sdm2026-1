@@ -1,3 +1,5 @@
+import { guestFingerprint } from "@sdm/core/server";
+import { Routes } from "@sdm/core/shared";
 import { createGameRoom, createGameServer, createGameServerContext } from "@sdm/host";
 import { boot, type ColyseusTestServer } from "@sdm/host/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -94,5 +96,24 @@ describe("template room", () => {
     const reply = client.waitForMessage("debug:result");
     client.send("debug:command", { id: "1", command: "spawn" });
     expect(await reply).toMatchObject({ ok: false });
+  });
+
+  it("players send a guest ID; seats show its fingerprint, and no HTTP response carries the raw ID", async () => {
+    const guestId = crypto.randomUUID();
+    const a = await colyseus.sdk.create("game", { private: true, name: "Ada", guestId });
+    await a.waitForInitialState();
+    const b = await colyseus.sdk.joinById(a.roomId, { name: "Ada, tab 2", guestId });
+    await b.waitForInitialState();
+    await a.waitForNextPatch();
+    const fp = guestFingerprint(templateGame.id, guestId);
+    expect(a.state.seats.get(a.sessionId)?.guest).toBe(fp);
+    expect(a.state.seats.get(b.sessionId)?.guest).toBe(fp);
+    expect(a.state.players.get(b.sessionId)?.name).toBe("Ada, tab 2");
+
+    const replay = await colyseus.http.get(Routes.replay(a.roomId));
+    const stats = await colyseus.http.get(Routes.stats);
+    expect(JSON.stringify(replay.data)).toContain(fp);
+    for (const body of [replay.data, stats.data, a.state.toJSON()])
+      expect(JSON.stringify(body)).not.toContain(guestId);
   });
 });

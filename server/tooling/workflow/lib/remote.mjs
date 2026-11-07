@@ -39,14 +39,27 @@ export function gitOrExit(args) {
   }
 }
 
-/** Fetches branches from origin so every comparison uses GitHub's state. @param {string[]} branches */
-export function fetchOrigin(branches) {
-  gitOrExit([
+/**
+ * The `git fetch` arguments that bring branches into their origin/ refs. A shallow clone (what
+ * actions/checkout makes) also fetches the full history: without it commit counts are wrong and
+ * there is no merge base to predict conflicts from.
+ * @param {string[]} branches
+ * @param {{ shallow: boolean }} opts
+ */
+export function fetchArgs(branches, { shallow }) {
+  return [
     "fetch",
     "--quiet",
+    ...(shallow ? ["--unshallow"] : []),
     "origin",
     ...branches.map((b) => `+refs/heads/${b}:refs/remotes/origin/${b}`),
-  ]);
+  ];
+}
+
+/** Fetches branches from origin so every comparison uses GitHub's state. @param {string[]} branches */
+export function fetchOrigin(branches) {
+  const shallow = gitOrExit(["rev-parse", "--is-shallow-repository"]).trim() === "true";
+  gitOrExit(fetchArgs(branches, { shallow }));
 }
 
 /** Whether origin has the branch (after fetching it). @param {string} branch */

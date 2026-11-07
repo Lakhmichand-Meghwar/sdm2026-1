@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GUEST_FINGERPRINT_PATTERN } from "./guest.ts";
 
 /**
  * Replay format: everything needed to re-run a room and get the same result.
@@ -21,6 +22,11 @@ export const ReplayEventSchema = z.discriminatedUnion("type", [
     tick,
     playerId,
     options: z.record(z.string(), z.unknown()).default({}),
+    /**
+     * The player's guest fingerprint (12 hex characters), or "" without a guest ID. Never the raw
+     * guest ID. Missing in replays recorded before guests existed, which read as "".
+     */
+    guest: z.string().regex(GUEST_FINGERPRINT_PATTERN).default(""),
   }),
   z.object({ type: z.literal("leave"), tick, playerId }),
   /** The connection dropped unexpectedly; the seat is held for `reconnectSeconds`. */

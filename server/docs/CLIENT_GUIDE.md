@@ -20,7 +20,7 @@ flowchart LR
 |---|---|---|
 | `@sdm/core/shared` | client and server | Message names, routes, zod schemas (`InputEnvelopeSchema`, `BugReportSchema`, …) |
 | `@sdm/core/sim` | client and server | `BaseState`, `RoomSettingsSchema`, `GameDefinition` types |
-| `@sdm/core/client` | client | URL params, invite links, the server address for a game under a path, the `~` debug overlay with console and network stats, F8 bug reports, network simulation, interpolation, prediction (see [Client core](#client-core-sdmcoreclient)) |
+| `@sdm/core/client` | client | URL params, invite links, the server address for a game under a path, the guest ID (`getGuestId`), the `~` debug overlay with console and network stats, F8 bug reports, network simulation, interpolation, prediction (see [Client core](#client-core-sdmcoreclient)) |
 | `@sdm/core/server` | server, tests | `Simulation`, `runReplay` |
 | `@sdm/host` | server | `startGameServer`, `createGameRoom` |
 | `@sdm/host/testing` | tests | `boot` for room tests |
@@ -46,7 +46,7 @@ In production every game is served under its own path, `<address>/team-N/`, behi
 1. **Server address from the page.** Use `serverUrlFromPage(location.href)` from `@sdm/core/client`, never `location.origin` (it drops `/team-N`). On a page one folder below the server root (for example `multiplayer/index.html`), pass `1`: `serverUrlFromPage(location.href, 1)`.
 2. **Relative assets.** Keep `base: "./"` in `vite.config.ts` (the template has it). With Vite's default `/`, the page asks for `/assets/...` and gets the gateway's 404 instead of your files.
 3. **No absolute links.** Write `href="multiplayer/"` or `href="./multiplayer/"`, not `href="/multiplayer/"`, and ``fetch(`${SERVER_URL}/path`)``, not `fetch("/path")`. A link that starts with `/` leaves your game. The same goes for `new URL("/path", SERVER_URL)`: a leading `/` replaces the path of the base, so `https://host/team-2` becomes `https://host/path`. Build the address by joining strings, or use `serverLink(SERVER_URL, "/path")` from `@sdm/core/client`. End links to a folder with a slash (`multiplayer/`, not `multiplayer`): without it `express.static` redirects to `/multiplayer/` without the prefix, which leaves the game.
-4. **Keep browser storage per game.** All games share one address, so `sessionStorage` and `localStorage` are shared too. Put the game's path in every key, as the template does (`sdm:${new URL(SERVER_URL).pathname}:reconnectionToken`), or a token or room code saved by `/team-2/` is tried on `/team-4/`.
+4. **Keep browser storage per game.** All games share one address, so `sessionStorage` and `localStorage` are shared too. Put the game's path in every key, as the template does (`sdm:${new URL(SERVER_URL).pathname}:reconnectionToken`), or a token or room code saved by `/team-2/` is tried on `/team-4/`. The one exception is `sdm:guestId` (see [Guest ID](#guest-id-recognise-a-returning-player)): it is deliberately shared by every game, and the server makes the public fingerprint different in each game.
 5. **One page at `/`.** The game's page is served for every path that is not the API, so a deep link such as `/lobby/QXTR` loads `index.html`, whose relative assets then resolve under `/lobby/` and fail. Pass state in the query string (`/team-2/?room=QXTR`, as invite links do), not in the path. A second HTML page needs its own folder (`multiplayer/index.html`) and a trailing-slash link.
 
 Check both ways: your game at the root of its own server, and behind the gateway at `/team-N/` (the local command is in the Gateway section of [ARCHITECTURE.md](../ARCHITECTURE.md)).
@@ -60,12 +60,12 @@ sequenceDiagram
   participant A as Client A
   participant S as Server
   participant B as Client B
-  A->>S: client.create("game", { private: true, name })
+  A->>S: client.create("game", { private: true, name, guestId })
   S-->>A: room, state.code = "QXTR"
   Note over A,B: A shares ?room=QXTR
   B->>S: POST /api/rooms/join { code: "QXTR" }
   S-->>B: { roomId }
-  B->>S: client.joinById(roomId, { name })
+  B->>S: client.joinById(roomId, { name, guestId })
   loop every tick
     A->>S: send("input", { seq, data })
     B->>S: send("input", { seq, data })
@@ -80,7 +80,7 @@ sequenceDiagram
 ### Create a private room
 
 ```ts
-const room = await client.create("game", { private: true, name: "Ada" });
+const room = await client.create("game", { private: true, name: "Ada", guestId: getGuestId() });
 // room.state.code is the 4-letter code (letters A–Z without I and O)
 ```
 
@@ -101,12 +101,12 @@ const res = await fetch(`${SERVER_URL}${Routes.joinByCode}`, {
 if (res.status === 404) /* unknown code */;
 if (res.status === 409) /* room is full */;
 const { roomId } = JoinByCodeResponseSchema.parse(await res.json());
-const room = await client.joinById(roomId, { name: "Bo" });
+const room = await client.joinById(roomId, { name: "Bo", guestId: getGuestId() });
 ```
 
 Invite links: `buildInviteLink(location.href, code)` and `readClientParams(location.search).room` from `@sdm/core/client`.
 
-Join options are checked by the game's `joinOptionsSchema`; invalid options reject the join with the zod message.
+Join options are checked by the game's `joinOptionsSchema`; invalid options reject the join with the zod message. `guestId` is the exception: the room base takes it out first, so games don't declare it (see [Guest ID](#guest-id-recognise-a-returning-player)).
 
 ### Send input
 
@@ -129,7 +129,7 @@ room.send("input", { seq: ++seq, data: { dx: 1, dy: 0 } });
 | `tick` | Simulation tick |
 | `code` | Room code, `""` for quick-match rooms |
 | `paused` | Set by the `pause` debug command |
-| `seats` | Map keyed by sessionId: `{ connected, lastSeq }` |
+| `seats` | Map keyed by sessionId: `{ connected, lastSeq, guest }` |
 
 Plus your game's own fields (the template has `players` and `pickups`). `seats[sessionId].lastSeq` is the last input seq the server applied for that player: a predicting client reconciles against it.
 
@@ -142,6 +142,36 @@ const room = await client.reconnect(sessionStorage.getItem("token"));
 ```
 
 A dropped player's seat is held for `reconnectSeconds` (from `config/game.json`; the template uses 20). The player keeps their sessionId and state; `seats[id].connected` is `false` while they're away. After the window the seat is gone and `reconnect` throws: fall back to joining the saved code as a new player. Wrap `sessionStorage` in try/catch (it can throw in private windows).
+
+### Guest ID (recognise a returning player)
+
+A sessionId lasts one seat. To know that the same person is back (in a second tab, after a reload, or after their seat expired), send a guest ID with every create and join:
+
+```ts
+import { getGuestId } from "@sdm/core/client";
+
+const guestId = getGuestId(); // a UUID in localStorage ("sdm:guestId"): every tab of this browser shares it
+await client.create("game", { private: true, name, guestId });
+await client.joinById(roomId, { name, guestId });
+```
+
+- If `localStorage` is missing or throws (private windows), `getGuestId()` returns one ID kept in memory for the page: the player joins normally but isn't recognised after a reload. Tests can pass their own storage: `getGuestId(fakeStorage)`.
+- A missing or invalid `guestId` (anything but a UUID) never rejects a join; that player's `guest` is `""`.
+- **What everyone sees:** `seats[sessionId].guest`, a public fingerprint (12 hex characters of the SHA-256 of `<game id>:<ID>`), the same for every seat of one browser in your game. Two seats with the same non-empty `guest` belong to one person. Another game gets a different fingerprint for the same browser, so players can't be linked across games.
+- **What your game gets:** the same fingerprint as the fourth argument of `join`, `info.guest`, and on `ctx.state.seats.get(playerId).guest`:
+
+  ```ts
+  join(ctx, playerId, options, { guest }) {
+    // Give a returning player their old character back (kept in your state when their seat expired).
+    const old = guest ? ctx.state.retired.get(guest) : undefined;
+    if (old) ctx.state.retired.delete(guest);
+    ctx.state.players.set(playerId, old ?? newPlayer(ctx, options));
+  },
+  ```
+
+  Keep what you want to restore in your synced state, not in a variable, so replays reproduce it. One guest can hold several seats at once (two tabs); stopping that is up to your game.
+- **It's a hint, not a login.** Use `guest` to recognise a returning player in your game, never to hand over a seat, a score or ownership: every game on the shared address can read `sdm:guestId`, and a client can send a fresh UUID to avoid being recognised (or any other UUID).
+- **Keep the raw ID out of sight anyway.** The server never puts it in state, logs, replays or HTTP responses, because those can be downloaded. Don't put it in a URL, a log line, a bug report or on screen yourself; show `guest` instead.
 
 ### Server messages
 
@@ -226,7 +256,7 @@ function frame(now: number) {
       ...net.read(now),
       ...frames.frame(now),
     },
-    { pickups: room.state.pickups.size }, // optional game lines
+    { pickups: room.state.pickups.size, guest: room.state.seats.get(room.sessionId)?.guest || "-" }, // optional game lines
     now,
   );
   requestAnimationFrame(frame);

@@ -191,13 +191,19 @@
                           "type": "string"
                         },
                         "additionalProperties": {}
+                      },
+                      "guest": {
+                        "default": "",
+                        "type": "string",
+                        "pattern": "^(?:[0-9a-f]{12})?$"
                       }
                     },
                     "required": [
                       "type",
                       "tick",
                       "playerId",
-                      "options"
+                      "options",
+                      "guest"
                     ],
                     "additionalProperties": false
                   },
@@ -869,13 +875,19 @@
                                   "type": "string"
                                 },
                                 "additionalProperties": {}
+                              },
+                              "guest": {
+                                "default": "",
+                                "type": "string",
+                                "pattern": "^(?:[0-9a-f]{12})?$"
                               }
                             },
                             "required": [
                               "type",
                               "tick",
                               "playerId",
-                              "options"
+                              "options",
+                              "guest"
                             ],
                             "additionalProperties": false
                           },
@@ -1332,13 +1344,19 @@
                     "type": "string"
                   },
                   "additionalProperties": {}
+                },
+                "guest": {
+                  "default": "",
+                  "type": "string",
+                  "pattern": "^(?:[0-9a-f]{12})?$"
                 }
               },
               "required": [
                 "type",
                 "tick",
                 "playerId",
-                "options"
+                "options",
+                "guest"
               ],
               "additionalProperties": false
             },

@@ -1,5 +1,5 @@
 import config from "@colyseus/tools";
-import { runReplay } from "@sdm/core/server";
+import { guestFingerprint, runReplay } from "@sdm/core/server";
 import type { Replay } from "@sdm/core/shared";
 import { counterConfig, makeCounterGame } from "@sdm/core/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +20,7 @@ const deps = (env: "development" | "production") => ({
 });
 
 const counter = makeCounterGame();
+const otherGame = makeCounterGame({ id: "other-game" });
 const tiny = makeCounterGame({ config: { ...counterConfig, maxPlayers: 1 } });
 const badJoin = makeCounterGame({
   join(_ctx, _playerId, options) {
@@ -40,9 +41,11 @@ beforeAll(async () => {
       initializeGameServer: (gs) => {
         gs.define("dev", createGameRoom(counter, deps("development")));
         gs.define("prod", createGameRoom(counter, deps("production")));
+        gs.define("other", createGameRoom(otherGame, deps("development")));
         gs.define("tiny", createGameRoom(tiny, deps("development")));
         gs.define("crash", createGameRoom(crashing, deps("development")));
         gs.define("badjoin", createGameRoom(badJoin, deps("development")));
+        gs.define("stats", createGameRoom(counter, { ...deps("development"), statsIntervalMs: 30 }));
       },
     }),
   );
@@ -166,5 +169,102 @@ describe("createGameRoom", () => {
     expect(log.lines.find((l) => l.level === "error")?.fields).toMatchObject({ roomId, methodName: "join" });
     expect(registry.get(roomId)).toBeUndefined();
     expect(replays.get(roomId)?.failure).toMatchObject({ hook: "join" });
+  });
+
+  describe("guests", () => {
+    const ada = "4f3e2d1c-0b9a-4876-9543-210fedcba987";
+    const bo = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+    type Seats = { seats: Map<string, { guest: string }> };
+    const guestOf = (state: unknown, id: string) => (state as Seats).seats.get(id)?.guest;
+
+    it("two clients with the same guest ID share a fingerprint and a third doesn't; the raw ID goes nowhere", async () => {
+      const room = await colyseus.createRoom("stats", {});
+      const roomId = room.roomId;
+      const a = await colyseus.connectTo(room, { name: "a", guestId: ada });
+      const b = await colyseus.connectTo(room, { name: "b", guestId: ada });
+      const c = await colyseus.connectTo(room, { name: "c", guestId: bo });
+      await vi.waitFor(() => expect(c.state.seats?.size).toBe(3), { timeout: 2000, interval: 20 });
+      await vi.waitFor(() => expect(guestOf(a.state, c.sessionId)).toBeTruthy(), {
+        timeout: 2000,
+        interval: 20,
+      });
+
+      const fp = guestFingerprint(counter.id, ada);
+      expect(fp).toMatch(/^[0-9a-f]{12}$/);
+      for (const view of [a.state, c.state]) {
+        expect(guestOf(view, a.sessionId)).toBe(fp);
+        expect(guestOf(view, b.sessionId)).toBe(fp);
+        expect(guestOf(view, c.sessionId)).toBe(guestFingerprint(counter.id, bo));
+      }
+      expect(guestFingerprint(counter.id, bo)).not.toBe(fp);
+
+      const joins = log.lines.filter((l) => l.message === "player joined");
+      expect(joins.map((l) => l.fields.guest)).toEqual([fp, fp, guestFingerprint(counter.id, bo)]);
+      await vi.waitFor(() => expect(log.lines.some((l) => l.message === "room.stats")).toBe(true), {
+        timeout: 2000,
+        interval: 20,
+      });
+
+      const live = registry.get(roomId)?.snapshot();
+      await Promise.all([a.leave(), b.leave(), c.leave()]);
+      await new Promise((r) => setTimeout(r, 50));
+      const places = {
+        clientState: JSON.stringify(a.state.toJSON()),
+        serverState: JSON.stringify(room.state.toJSON()),
+        liveReplay: JSON.stringify(live),
+        storedReplay: JSON.stringify(replays.get(roomId)),
+        logs: JSON.stringify(log.lines),
+      };
+      for (const [place, text] of Object.entries(places)) {
+        expect(text, place).not.toContain(ada);
+        expect(text, place).not.toContain(bo);
+      }
+      expect(places.storedReplay).toContain(fp);
+      const replay = replays.get(roomId);
+      expect(replay && runReplay(counter, replay).stateHash).toBe(replay?.final?.stateHash);
+    });
+
+    it("the fingerprint is per game: one guest ID gets the same guest in every room of a game, another in a different game", async () => {
+      const [first, second, other] = await Promise.all([
+        colyseus.createRoom("dev", {}),
+        colyseus.createRoom("dev", {}),
+        colyseus.createRoom("other", {}),
+      ]);
+      const clients = await Promise.all(
+        [first, second, other].map((room) => colyseus.connectTo(room, { name: "a", guestId: ada })),
+      );
+      const guests = await Promise.all(
+        clients.map(async (client) => {
+          await vi.waitFor(() => expect(guestOf(client.state, client.sessionId)).toBeTruthy(), {
+            timeout: 2000,
+            interval: 20,
+          });
+          return guestOf(client.state, client.sessionId);
+        }),
+      );
+      expect(guests[0]).toBe(guestFingerprint(counter.id, ada));
+      expect(guests[1]).toBe(guests[0]);
+      expect(guests[2]).toBe(guestFingerprint("other-game", ada));
+      expect(guests[2]).not.toBe(guests[0]);
+    });
+
+    it('a join with a missing or bad guestId still works, with guest ""', async () => {
+      const room = await colyseus.createRoom("dev", {});
+      const clients = await Promise.all(
+        [{}, { guestId: "nope" }, { guestId: 42 }, { guestId: "x".repeat(5000) }].map((options) =>
+          colyseus.connectTo(room, { name: "p", ...options }),
+        ),
+      );
+      const [first] = clients;
+      await vi.waitFor(() => expect(first?.state.seats?.size).toBe(4), { timeout: 2000, interval: 20 });
+      for (const client of clients) expect(guestOf(first?.state, client.sessionId)).toBe("");
+      expect(log.lines.filter((l) => l.message === "player joined").map((l) => l.fields.guest)).toEqual([
+        "",
+        "",
+        "",
+        "",
+      ]);
+      expect(log.lines.some((l) => l.message === "join rejected")).toBe(false);
+    });
   });
 });

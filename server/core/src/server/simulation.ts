@@ -5,6 +5,7 @@
  * No clocks and no Colyseus here: the room measures timing around `tick()`.
  */
 import {
+  GUEST_FINGERPRINT_PATTERN,
   InputEnvelopeSchema,
   REPLAY_VERSION,
   type Replay,
@@ -20,6 +21,7 @@ import {
   type TickInput,
 } from "../sim/index.ts";
 import { runDebugCommand } from "./debugCommands.ts";
+import { withoutGuestId } from "./guest.ts";
 import { stateHash } from "./stateHash.ts";
 
 export const DEFAULT_MAX_EVENTS = 1_000_000;
@@ -111,15 +113,22 @@ export class Simulation<S extends BaseState, I, C extends RoomSettings> {
     return this.state.seats.has(playerId);
   }
 
-  /** Throws when the options fail the game's join schema or the player is already seated. */
-  join(playerId: string, rawOptions: unknown): void {
+  /**
+   * Seats a player. `guest` is the guest fingerprint (`guestFingerprint()`), never the raw guest ID;
+   * any `guestId` left in the options is removed before the game's join schema sees them.
+   * Throws when the options fail the game's join schema or the player is already seated.
+   */
+  join(playerId: string, rawOptions: unknown, guest = ""): void {
     if (this.hasSeat(playerId)) throw new Error(`player ${playerId} is already in the room`);
-    const options = this.def.joinOptionsSchema.parse(rawOptions ?? {});
-    this.state.seats.set(playerId, new Seat());
+    if (!GUEST_FINGERPRINT_PATTERN.test(guest)) throw new Error("guest must be a guest fingerprint");
+    const options = this.def.joinOptionsSchema.parse(withoutGuestId(rawOptions) ?? {});
+    const seat = new Seat();
+    seat.guest = guest;
+    this.state.seats.set(playerId, seat);
     this.#lastQueuedSeq.delete(playerId);
     // Recorded before the hook runs, so a replay re-throws a crash in it at the same point.
-    this.#record({ type: "join", tick: this.state.tick, playerId, options });
-    this.#hook("join", () => this.def.join(this.ctx, playerId, options));
+    this.#record({ type: "join", tick: this.state.tick, playerId, options, guest });
+    this.#hook("join", () => this.def.join(this.ctx, playerId, options, { guest }));
   }
 
   leave(playerId: string): void {
