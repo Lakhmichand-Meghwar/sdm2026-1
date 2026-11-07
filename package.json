@@ -8,6 +8,7 @@
   },
   "scripts": {
     "preinstall": "node server/tooling/check-node.mjs",
+    "prepare": "node server/tooling/install-hooks.mjs",
     "new-game": "node server/tooling/new-game.mjs",
     "dev": "pnpm --filter @sdm/template dev",
     "build": "pnpm -r build",
@@ -32,12 +33,23 @@
     "check:config": "node server/tooling/workflow/check-config.mjs",
     "check:determinism": "node server/tooling/workflow/check-determinism.mjs",
     "check:contract": "node server/tooling/workflow/check-contract.mjs",
+    "check:review": "node server/tooling/workflow/check-review.mjs",
+    "team:set": "node server/tooling/workflow/team-set.mjs",
+    "issue:start": "node server/tooling/workflow/issue-start.mjs",
+    "pr:open": "node server/tooling/workflow/pr-open.mjs",
     "preflight": "node server/tooling/workflow/preflight.mjs",
     "preflight:quick": "node server/tooling/workflow/preflight.mjs --quick",
+    "sync": "node server/tooling/workflow/sync.mjs",
+    "team:promote": "node server/tooling/workflow/team-promote.mjs",
+    "branches:sync": "node server/tooling/workflow/branches-sync.mjs",
+    "release": "node server/tooling/workflow/release.mjs",
+    "env:status": "node server/tooling/workflow/env-status.mjs",
+    "env:wait": "node server/tooling/workflow/env-wait.mjs",
     "qa:bots": "node scripts/qa/bots.mjs",
     "qa:multi": "node scripts/qa/multi.mjs",
     "qa:load": "pnpm dlx @colyseus/loadtest@0.18.4 scripts/qa/load.ts --endpoint ws://localhost:2567 --room sample_room --numClients 50",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "check:instructor": "node server/tooling/workflow/check-instructor.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5",

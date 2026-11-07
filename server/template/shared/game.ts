@@ -46,6 +46,24 @@ function addPickup(ctx: Ctx): string {
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
+export interface Position {
+  readonly x: number;
+  readonly y: number;
+}
+
+/**
+ * One tick of movement for one player. The room's `step` uses it, and the client uses the same rule
+ * to predict its own player (createPredictor), so both always agree.
+ */
+export function movePlayer(position: Position, input: SampleInput, cfg: SampleConfig, dt: number): Position {
+  const { speed, radius } = cfg.player;
+  const { width, height } = cfg.arena;
+  return {
+    x: clamp(position.x + input.dx * speed * dt, radius, width - radius),
+    y: clamp(position.y + input.dy * speed * dt, radius, height - radius),
+  };
+}
+
 export const templateGame: GameDefinition<SampleState, SampleInput, SampleConfig> = {
   id: GAME_ID,
   createState: () => new SampleState(),
@@ -80,16 +98,15 @@ export const templateGame: GameDefinition<SampleState, SampleInput, SampleConfig
     const latest = new Map<string, SampleInput>();
     for (const input of inputs) latest.set(input.playerId, input.data);
 
-    const { speed, radius } = ctx.config.player;
-    const { width, height } = ctx.config.arena;
     for (const [id, input] of latest) {
       const player = ctx.state.players.get(id);
       if (!player) continue;
-      player.x = clamp(player.x + input.dx * speed * ctx.dt, radius, width - radius);
-      player.y = clamp(player.y + input.dy * speed * ctx.dt, radius, height - radius);
+      const next = movePlayer(player, input, ctx.config, ctx.dt);
+      player.x = next.x;
+      player.y = next.y;
     }
 
-    const reach = radius + ctx.config.pickups.radius;
+    const reach = ctx.config.player.radius + ctx.config.pickups.radius;
     for (const pickup of ctx.state.pickups.values()) {
       for (const player of ctx.state.players.values()) {
         if ((player.x - pickup.x) ** 2 + (player.y - pickup.y) ** 2 <= reach ** 2) {

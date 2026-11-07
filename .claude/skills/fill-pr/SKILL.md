@@ -24,6 +24,10 @@ Use `origin/main` as `<base-ref>` for platform and instructor work, `origin/feat
 - Releases and syncs have `main` as their head. Pass `--target prod` for a release or `--target feature/team-N` for a sync, and `--label platform` (they use `Refs #N`, not `Closes #N`).
 - If it lists several owners for the changed files, the change must be split, because a PR has exactly one team label.
 
+## The team-instructor label
+
+`team-instructor` is reserved for the instructors (`.github/instructors.json`). The classifier refuses it, with an explanation, when the GitHub account is not on that list. **Do not work around it**: never pass `--actor`, never edit the list, never write the label by hand. Stop, tell the user which label you would use instead (their team's, or `platform`; for changes under `course/` from another team, also a line `Cross-team: <why>` in the issue) and continue with that.
+
 ## 2. Gather the facts
 
 - The issue: `gh issue view <n>` (the number is in the branch name). The summary must match what the issue asked for.

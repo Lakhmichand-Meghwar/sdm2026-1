@@ -1,5 +1,6 @@
 packages:
   - server/core
+  - server/gateway
   - server/host
   - server/template
   - server/tooling

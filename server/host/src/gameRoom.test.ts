@@ -1,4 +1,3 @@
-import { boot, type ColyseusTestServer } from "@colyseus/testing";
 import config from "@colyseus/tools";
 import { runReplay } from "@sdm/core/server";
 import type { Replay } from "@sdm/core/shared";
@@ -6,6 +5,7 @@ import { counterConfig, makeCounterGame } from "@sdm/core/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createGameRoom, LiveRoomRegistry } from "./gameRoom.ts";
 import { captureLog } from "./testing/captureLog.ts";
+import { boot, type ColyseusTestServer } from "./testing/index.ts";
 
 const replays = new Map<string, Replay>();
 const sink = { putReplay: (roomId: string, replay: Replay) => replays.set(roomId, replay) };
@@ -45,10 +45,9 @@ beforeAll(async () => {
         gs.define("badjoin", createGameRoom(badJoin, deps("development")));
       },
     }),
-    2601,
   );
 });
-afterAll(() => colyseus.shutdown());
+afterAll(() => colyseus?.shutdown());
 beforeEach(async () => {
   await colyseus.cleanup();
   log.lines.length = 0;

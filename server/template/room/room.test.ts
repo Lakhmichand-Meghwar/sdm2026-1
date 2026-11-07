@@ -23,10 +23,9 @@ beforeAll(async () => {
       },
       ctx,
     ),
-    2602,
   );
 });
-afterAll(() => colyseus.shutdown());
+afterAll(() => colyseus?.shutdown());
 beforeEach(() => colyseus.cleanup());
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
