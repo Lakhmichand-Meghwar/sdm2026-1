@@ -160,6 +160,7 @@ describe("clock", () => {
     room.tick(Math.ceil(game.config.resetSeconds * game.config.tickRate));
     expect(room.state.phase).toBe("playing");
     expect(room.state.loop).toBe(2);
+    expect(room.state.resets).toBe(1);
     expect(room.state.timeLeft).toBe(game.config.levels[0]?.duration);
     expect(room.state.paintClicks).toBe(0);
     expect(room.journal("b")).toEqual(["blue4"]);
@@ -225,6 +226,7 @@ describe("room 1 · the office", () => {
     expect(room.state.keyHolder).toBe(1);
     room.tap("b", "cabinet");
     expect(room.state.cabinetOpen).toBe(true);
+    expect(room.lastEvent()?.text).toContain("corkboard");
     expect(room.journal("a")).toContain("findyear");
     expect(room.journal("b")).toContain("findyear");
   });
@@ -263,7 +265,7 @@ describe("room 2 · the archive", () => {
     expect(room.state.level).toBe(2);
     expect(room.state.timeLeft).toBe(game.config.levels[1]?.duration);
     expect(room.state.previous).toContain("The Office cleared");
-    expect(room.state.totalLoops).toBe(1);
+    expect(room.state.resets).toBe(0);
   });
 
   it("takes time for a wrong book and starts the shelf over", () => {
@@ -367,7 +369,7 @@ describe("whole game", () => {
   it("can be won, and each journal holds what that detective learned", () => {
     const room = playThrough();
     expect(room.state.phase).toBe("won");
-    expect(room.state.totalLoops).toBe(3);
+    expect(room.state.resets).toBe(0);
     expect(room.journal("a")).toEqual(
       expect.arrayContaining(["year1998", "shelforder", "month04", "safecode"]),
     );
@@ -381,7 +383,7 @@ describe("whole game", () => {
     expect(room.state.level).toBe(1);
     expect(room.journal("a")).toEqual([]);
     expect(room.journal("b")).toEqual([]);
-    expect(room.state.totalLoops).toBe(0);
+    expect(room.state.resets).toBe(0);
   });
 
   it("replays to the same final state", () => {
@@ -490,7 +492,7 @@ describe("playing alone", () => {
     const room = solo();
     soloGame(room);
     expect(room.state.phase).toBe("won");
-    expect(room.state.totalLoops).toBe(3);
+    expect(room.state.resets).toBe(0);
   });
 
   it("starts over on restart and stays single-player", () => {
