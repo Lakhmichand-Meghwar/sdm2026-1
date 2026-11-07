@@ -26,3 +26,6 @@ Thumbs.db
 .vite/
 *.tsbuildinfo
 .pnpm-store/
+
+# Private instructor reports (student scores): never commit, the repository is public
+.private/

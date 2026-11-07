@@ -250,4 +250,4 @@ class EscapeRoom extends Room {
   }
 }
 
-export const rooms = { [escapeRoomName]: EscapeRoom };
+export const rooms = { [escapeRoomName]: () => EscapeRoom };

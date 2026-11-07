@@ -17,7 +17,6 @@
     "@colyseus/sdk": "0.18.9",
     "@sdm/core": "workspace:*",
     "@sdm/host": "workspace:*",
-    "colyseus": "0.18.11",
     "zod": "4.6.7"
   },
   "devDependencies": {
