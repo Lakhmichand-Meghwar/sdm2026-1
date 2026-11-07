@@ -62,6 +62,8 @@ At the end of the hackathon the results are evaluated with the help of AI, based
 
 Only work that is visible in this repository counts, so keep your issues and PRs up to date.
 
+**Rules of their time:** every PR is judged by the rules in force when it was opened, and every commit by the rules in force when it was made. A merged PR never needs to be edited, and the rules tightened during the hackathon cost nobody points.
+
 ### Checking PR documentation
 
 The evaluation reads the pull requests, so they have to be documented well enough. One command lists, per team, which PRs are not, and why:
@@ -86,9 +88,31 @@ A PR passes when all of this is true (the rules from [CLAUDE.md](../CLAUDE.md) a
 
 Sync and release PRs (from `main`) and integration PRs (`feature/team-N` into `main`) carry several issues, so for them only the template rules are checked.
 
+**Rule eras.** The rules above got stricter during the hackathon. The report judges each PR by the rules in force when it was opened (each commit by when it was made), from the merge time of the PR that introduced them (UTC, 2026-11-06):
+
+| Since | PR | What came in |
+|-------|----|--------------|
+| 10:47 | #2 | The first workflow rules: `[<team-label>]` title, linked issue, team label on the issue |
+| 10:53 | #3 | The PR template and its `## Team` section |
+| 11:41 | #18 | The `feature/team-N` branching workflow (base branches) |
+| 13:44 | #61 | Typed PR templates and `check:pr`: every heading, the full checklist, branch names, the PR's team label, `Refs #N` in commits |
+| 14:29 | #86 | Conventional Commits titles (`feat(team-2): …`); older PRs keep `[team-2] …` |
+
+A problem against a rule from after the PR was opened is listed as *legacy*: shown for information, never counted, neither in this report nor in the student report. A PR passes when it has no current problems.
+
+**Exceptions.** If a checklist item can't honestly be ticked, leave it unticked and explain why on the next line, starting with `Exception:`:
+
+```markdown
+- [ ] Commits follow Conventional Commits and reference the issue (`Refs #N`)
+
+  Exception: the first two commits were pushed before the review and are kept, as the reviewers asked.
+```
+
+The report accepts that item, and also the automatic check behind it (here `Refs #N` in the commits; likewise for the title, branch name, "base branch is correct" and team label items). It still shows the exception, so the reviewer and the evaluation can see it: as a warning on a failing PR, and in the *Passing with an "Exception:" note* block for a PR that passes. "The branch is up to date with its base branch" covers no automatic check: an exception there does not excuse a wrong base branch.
+
 **During the hackathon:** run `node course/tooling/pr-report.mjs --state open --failing` now and then, and fix what it lists (edit the PR description, add the label, retarget the base branch). Commits that are already pushed don't have to be rewritten; reference the issue in the next ones.
 
-**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. PRs merged before a rule existed (for example, a checklist from before it grew to ten items) fail that rule; take that into account when weighting the result. The title rule is the exception: PRs opened before the commit format (#86, merged 2026-11-06 14:29 UTC) are judged by the title rule of their time, `[team-2] Add login`, and the report attributes them to their team through that prefix. Only the report makes this exception: `pnpm check:pr` and CI always ask for the commit format, so a PR that is still open needs it before it merges.
+**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. Only current problems count; legacy problems (see *Rule eras* above) are for information. The report still attributes old PRs to their team through the old `[team-N]` prefix. Only the report makes this exception: `pnpm check:pr` and CI always ask for the current rules (for example the commit-format title), so a PR that is still open needs them before it merges.
 
 #### Fixing PRs automatically
 
@@ -100,10 +124,10 @@ node course/tooling/pr-report.mjs --fix --apply    # make the changes on GitHub
 `--fix` corrects what can be corrected without guessing, on every PR (`--state` and `--team` narrow it down):
 
 - **Open PRs:** adds the missing team label, fixes the title, restructures the description into its template (existing text is moved under the right heading, never removed), adds `Closes #N` from the branch name, sets `## Team`, appends missing checklist items unticked, and retargets the PR to the right base branch. A PR stacked on another work branch is not retargeted.
-- **Merged and closed PRs:** only what the evaluation needs to credit the work: the team label, the title, the linked issue and the team. Their descriptions otherwise stay as they were written, since they followed the template of their time.
+- **Merged and closed PRs:** only what the evaluation needs to credit the work, and only against the rules of their time: the team label, the title, the linked issue and the team. Their descriptions otherwise stay as they were written. They never get a comment, since their authors can no longer change anything.
 - **Titles** follow the rule of the time the PR was opened. A conventional title only gets its scope corrected to the team label. An old `[team-2] …` title on a PR opened before conventional titles (#86) stays as it is. A newer title gets the type its commits agree on, and is left alone if they don't agree.
 
-It never ticks checklist items, writes a summary, test steps or screenshots, or touches commits. What only the author can do is listed in one comment per PR. The next run updates that comment instead of posting a new one, and a run after `--apply` changes nothing. Open PRs always get the comment; merged and closed ones only when something was changed on them.
+It never ticks checklist items, writes a summary, test steps or screenshots, or touches commits. What only the author can do is listed in one comment per PR. The next run updates that comment instead of posting a new one, and a run after `--apply` changes nothing. Only open PRs get the comment, and it only lists current problems, never legacy ones.
 
 ### Checking issue labels and titles
 
@@ -137,7 +161,7 @@ node course/tooling/issue-report.mjs --fix --apply    # make the changes on GitH
 
 - **Missing team label:** added when the title prefix names a team, also a malformed one such as `[team : 4]` or `[Team 4]`.
 - **Missing or malformed title prefix:** set to `[<team-label>]` when the issue has exactly one team label.
-- **Not fixed:** a prefix that names another team than the label, several team labels, or an issue that names no team at all. Which team is right is for the author to say, so on open issues these are listed in a comment, which the next run updates instead of repeating. Closed issues only get a comment when something was changed on them.
+- **Not fixed:** a prefix that names another team than the label, several team labels, or an issue that names no team at all. Which team is right is for the author to say, so on open issues these are listed in a comment, which the next run updates instead of repeating. Closed issues never get a comment.
 
 Run the issue fix before the PR fix: the PR report also checks that the linked issue has the same team label.
 

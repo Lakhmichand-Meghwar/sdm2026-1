@@ -199,13 +199,61 @@ describe("planFix on merged and closed PRs", () => {
     expect(out).toMatch(/## Linked issue\n\nCloses #12\n\n## Team\n\nteam-2\n\n## Summary/);
   });
 
-  it("comments only when something was changed", () => {
-    expect(plan({ state: "MERGED", body: "## Summary\nx", labels: ["team-2"] }).comment).not.toBeNull();
+  it("never comments, even when something was changed (#183)", () => {
+    const changed = plan({ state: "MERGED", body: "## Summary\nx", labels: ["team-2"] });
+    expect(changed.changes).not.toEqual({});
+    expect(changed.comment).toBeNull();
+    const closed = plan({ state: "CLOSED", body: "## Summary\nx" });
+    expect(closed.comment).toBeNull();
     const untouched = plan({
       state: "MERGED",
       body: goodBody().replace("## Screenshots\n\nNone", "## Screenshots\n\n"),
     });
     expect(untouched.changes).toEqual({});
     expect(untouched.comment).toBeNull();
+  });
+});
+
+describe("planFix and rule eras (#183)", () => {
+  const OLD = "2026-11-06T12:00:00Z";
+
+  it("does not fix or report problems against rules from after the PR was opened", () => {
+    // Opened before #61: no template, no checklist, no team label, an old-style title.
+    const p = plan({
+      createdAt: OLD,
+      title: "[team-2] Add login",
+      body: "Closes #12\n\nSome text",
+      state: "OPEN",
+    });
+    expect(p.changes.body).toBeUndefined();
+    expect(p.remaining).toEqual([]);
+    expect(p.comment).toBeNull();
+  });
+
+  it("only lists current problems in the comment on an open PR", () => {
+    const body = goodBody().replace("- [x] I tested", "- [ ] I tested");
+    const p = plan({ body });
+    expect(p.remaining.map((r) => r.rule)).toEqual(["checklist"]);
+    expect(p.comment).toContain("checklist");
+  });
+});
+
+describe("planFix with an earlier comment (#183)", () => {
+  it("updates the comment of an open PR that now passes to say nothing is left", () => {
+    const p = planFix({ pr: base, commits, issues, config, templates, hadComment: true });
+    expect(p.changes).toEqual({});
+    expect(p.comment).toContain("Nothing left to do");
+  });
+
+  it("leaves an earlier comment on a merged PR alone", () => {
+    const p = planFix({
+      pr: { ...base, state: "MERGED" },
+      commits,
+      issues,
+      config,
+      templates,
+      hadComment: true,
+    });
+    expect(p.comment).toBeNull();
   });
 });

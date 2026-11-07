@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { auditPr, formatReport, groupByTeam, linkedIssue, teamOf } from "./lib/pr-report.mjs";
+import {
+  auditPr,
+  formatReport,
+  groupByTeam,
+  isLegacy,
+  linkedIssue,
+  RULE_ERAS,
+  teamOf,
+  uncheckedItems,
+} from "./lib/pr-report.mjs";
 
 const root = new URL("../../", import.meta.url);
 const read = (rel: string) => readFileSync(new URL(rel, root), "utf8");
@@ -167,6 +176,163 @@ describe("groupByTeam and formatReport", () => {
   it("leaves out the passing list with failingOnly", () => {
     const md = formatReport(groups, { repo: "o/r", state: "all", generatedAt: "now", failingOnly: true });
     expect(md).not.toContain("Passing:");
+  });
+});
+
+describe("rule eras (#183)", () => {
+  const BEFORE_61 = "2026-11-06T12:00:00Z";
+  const BETWEEN = "2026-11-06T14:00:00Z";
+  const AFTER_86 = "2026-11-06T16:00:00Z";
+  const old = { ...pr, title: "[team-2] Add login", body: "Closes #12\n\nAdded the login form.", labels: [] };
+  const at = (createdAt: string, over: Record<string, unknown> = {}) =>
+    audit({ pr: { ...old, createdAt, ...over } });
+
+  it("dates the eras from the PRs that introduced the rules", () => {
+    expect(RULE_ERAS.map((e) => e.pr)).toEqual([2, 3, 18, 61, 86]);
+    const dates = RULE_ERAS.map((e) => e.since);
+    expect([...dates].sort()).toEqual(dates);
+  });
+
+  it("shows problems against later rules as legacy, and passes the PR", () => {
+    const r = at(BEFORE_61);
+    expect(r.problems).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(r.legacy.map((p) => p.rule)).toEqual(expect.arrayContaining(["title", "labels", "heading"]));
+  });
+
+  it("counts the template rules for PRs opened after #61, but still not the new title rule", () => {
+    const r = at(BETWEEN);
+    expect(r.ok).toBe(false);
+    expect(r.problems.map((p) => p.rule)).toEqual(expect.arrayContaining(["labels", "heading"]));
+    expect(r.legacy.map((p) => p.rule)).toEqual(["title"]);
+  });
+
+  it("counts everything for PRs opened after #86", () => {
+    const r = at(AFTER_86);
+    expect(r.problems.map((p) => p.rule)).toContain("title");
+    expect(r.legacy).toEqual([]);
+  });
+
+  it("only excuses a title that followed the old title rule", () => {
+    expect(
+      isLegacy({ rule: "title" }, { title: "[team-2] Add login", createdAt: BEFORE_61 }, config.teamLabels),
+    ).toBe(true);
+    expect(
+      isLegacy({ rule: "title" }, { title: "[course] Add x", createdAt: BEFORE_61 }, config.teamLabels),
+    ).toBe(false);
+    expect(isLegacy({ rule: "title" }, { title: "Add x", createdAt: BEFORE_61 }, config.teamLabels)).toBe(
+      false,
+    );
+  });
+
+  it("never treats a problem as legacy without a creation date, or for rules from the start", () => {
+    expect(isLegacy({ rule: "labels" }, { title: "x", createdAt: null }, config.teamLabels)).toBe(false);
+    expect(isLegacy({ rule: "issue-label" }, { title: "x", createdAt: BEFORE_61 }, config.teamLabels)).toBe(
+      false,
+    );
+  });
+
+  it("treats every problem of a PR opened before the first rules (#2) as legacy", () => {
+    const first = { title: "Add team folders", createdAt: "2026-11-06T10:46:24Z" };
+    for (const rule of ["title", "issue-label", "team", "base", "labels", "heading"])
+      expect(isLegacy({ rule }, first, config.teamLabels)).toBe(true);
+    // #18 was opened after #3 brought the "## Team" section, so that rule counts for it.
+    const pr18 = { title: "[course] Document the branching workflow", createdAt: "2026-11-06T11:11:42Z" };
+    expect(isLegacy({ rule: "team" }, pr18, config.teamLabels)).toBe(false);
+    expect(isLegacy({ rule: "title" }, pr18, config.teamLabels)).toBe(false);
+  });
+
+  it("judges each commit by the date it was made", () => {
+    const commits = [
+      { message: "add login", committedDate: BEFORE_61 },
+      { message: "add logout", committedDate: AFTER_86 },
+    ];
+    const r = audit({ commits, pr: { ...pr, createdAt: AFTER_86 } });
+    expect(r.problems.find((p) => p.rule === "commit-refs")?.message).toMatch(/^1 of 2 .*add logout/);
+    expect(r.legacy.find((p) => p.rule === "commit-refs")?.message).toMatch(/^1 of 2 .*add login/);
+  });
+
+  it("lists legacy problems in their own block in the Markdown report", () => {
+    const groups = groupByTeam([at(BEFORE_61, { number: 16 })], config.teamLabels);
+    const md = formatReport(groups, { repo: "o/r", state: "all", generatedAt: "now" });
+    expect(md).toContain("1 of 1 pull request pass.");
+    expect(md).toContain("Legacy, not counted");
+    expect(md).toMatch(/- #16: .*title/);
+  });
+});
+
+describe("Exception notes (#183)", () => {
+  const withException = (item: string, note = "  Exception: pushed before the review, kept as asked.") =>
+    body().replace(`- [x] ${item}`, `- [ ] ${item}\n\n${note}`);
+  const commitsItem = "Commits follow Conventional Commits and reference the issue (`Refs #N`)";
+
+  it("finds unticked items with and without an Exception note", () => {
+    const b = withException(commitsItem).replace("- [x] I tested", "- [ ] I tested");
+    const u = uncheckedItems(b);
+    expect(u.open).toBe(1);
+    expect(u.excepted).toEqual([commitsItem]);
+    expect([...u.exceptedRules]).toEqual(["commit-refs"]);
+  });
+
+  it("accepts an unticked item with an Exception note, and the rule it covers (#91)", () => {
+    const r = audit({
+      pr: { ...pr, body: withException(commitsItem) },
+      commits: [...good, { message: "feat(team-2): add logout (Refs #12)" }],
+    });
+    expect(r.problems).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(r.accepted.map((p) => p.rule)).toEqual(["commit-refs"]);
+    expect(r.warnings.join(" ")).toContain("Exception");
+  });
+
+  it("still fails an unticked item without a note", () => {
+    const r = audit({ pr: { ...pr, body: body().replace("- [x] I tested", "- [ ] I tested") } });
+    expect(r.problems.map((p) => p.rule)).toEqual(["checklist"]);
+    expect(r.problems[0].message).toMatch(/^1 checklist item/);
+  });
+
+  it("does not excuse a wrong base branch with an Exception on the up-to-date item", () => {
+    const upToDate = "The branch is up to date with its base branch";
+    const u = uncheckedItems(withException(upToDate, "  Exception: couldn't merge main in yet."));
+    expect(u.excepted).toEqual([upToDate]);
+    expect([...u.exceptedRules]).toEqual([]);
+    const r = audit({ pr: { ...pr, base: "main", body: withException(upToDate) } });
+    expect(r.problems.map((p) => p.rule)).toContain("base");
+    expect(r.accepted).toEqual([]);
+  });
+
+  it("accepts the base rule with an Exception on the base-branch item", () => {
+    const item = body().match(/- \[x\] (The base branch is correct[^\n]*)/)?.[1] ?? "";
+    expect(item).not.toBe("");
+    expect([...uncheckedItems(withException(item)).exceptedRules]).toEqual(["base"]);
+  });
+
+  it("lists passing PRs with an Exception in the Markdown report", () => {
+    const r = audit({
+      pr: { ...pr, number: 91, body: withException(commitsItem) },
+      commits: [...good, { message: "feat(team-2): add logout (Refs #12)" }],
+    });
+    const md = formatReport(groupByTeam([r], config.teamLabels), {
+      repo: "o/r",
+      state: "all",
+      generatedAt: "now",
+    });
+    expect(md).toContain("Passing: #91");
+    expect(md).toMatch(
+      /Passing with an "Exception:" note[^\n]*\n- #91: "Commits follow .*\(accepts commit-refs\)/,
+    );
+    const failingOnly = formatReport(groupByTeam([r], config.teamLabels), {
+      repo: "o/r",
+      state: "all",
+      generatedAt: "now",
+      failingOnly: true,
+    });
+    expect(failingOnly).not.toContain("Exception");
+  });
+
+  it("does not take an empty Exception or a ticked item as a note", () => {
+    expect(uncheckedItems(withException(commitsItem, "  Exception:")).open).toBe(1);
+    expect(uncheckedItems(withException(commitsItem, "- [x] Exception: x")).open).toBe(1);
   });
 });
 

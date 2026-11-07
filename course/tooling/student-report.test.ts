@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { collectStats, formatStudentReport, scoreAll, scoreStudent } from "./lib/student-report.mjs";
+import {
+  collectStats,
+  docsFromReport,
+  formatStudentReport,
+  scoreAll,
+  scoreStudent,
+} from "./lib/student-report.mjs";
 
 const teamLabels = ["team-1", "team-2", "team-3", "team-4", "platform", "team-instructor"];
 
@@ -178,5 +184,24 @@ describe("scoreAll and formatStudentReport", () => {
     expect(md).toContain("| `alice` | team-2 | **2** |");
     expect(md).toContain("a \\| b.");
     expect(md.match(/^\| `/gm)).toHaveLength(3);
+  });
+});
+
+describe("docsFromReport (#183)", () => {
+  it("scores only current problems: a PR with only legacy problems passes", () => {
+    const report = {
+      teams: [
+        {
+          passing: [{ number: 16, problems: [], legacy: [{ rule: "title" }, { rule: "checklist" }] }],
+          failing: [{ number: 31, problems: [{ rule: "checklist" }], legacy: [{ rule: "title" }] }],
+        },
+      ],
+    };
+    const docs = docsFromReport(report);
+    expect(docs.get(16)).toEqual({ ok: true, rules: [] });
+    expect(docs.get(31)).toEqual({ ok: false, rules: ["checklist"] });
+    const s = of(stats({ prs: [pr({ number: 16 }), pr({ number: 31 })], docs }), "alice");
+    expect([s.docPass, s.docFail]).toEqual([1, 1]);
+    expect(s.docProblems).toEqual({ checklist: 1 });
   });
 });

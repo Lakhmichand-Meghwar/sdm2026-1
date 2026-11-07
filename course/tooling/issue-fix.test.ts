@@ -93,3 +93,18 @@ describe("planIssueFix", () => {
     expect(second.comment).toBeNull();
   });
 });
+
+describe("planIssueFix on closed issues (#183)", () => {
+  it("fixes a closed issue but never comments on it", () => {
+    const p = planIssueFix({ issue: { ...issue("[team-1] Add x", []), state: "CLOSED" }, config });
+    expect(p.changes).toEqual({ addLabels: ["team-1"] });
+    expect(p.comment).toBeNull();
+  });
+});
+
+describe("planIssueFix with an earlier comment (#183)", () => {
+  it("updates the comment of an open issue that now passes", () => {
+    const p = planIssueFix({ issue: issue("[team-2] Add x", ["team-2"]), config, hadComment: true });
+    expect(p.comment).toContain("Nothing left to do");
+  });
+});

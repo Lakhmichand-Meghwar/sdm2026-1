@@ -37,6 +37,22 @@ const emptyStats = (login) => ({
 });
 
 /**
+ * Reads the PR documentation results from `pr-report.mjs --json`. Only current problems count: problems
+ * against a rule introduced after the PR was opened are in `legacy` and never cost points (#183).
+ * @param {{ teams: { failing?: { number: number, problems: { rule: string }[] }[], passing?: { number: number }[] }[] }} report
+ * @returns {Map<number, { ok: boolean, rules: string[] }>}
+ */
+export function docsFromReport(report) {
+  const docs = new Map();
+  for (const team of report.teams) {
+    for (const p of team.passing ?? []) docs.set(p.number, { ok: true, rules: [] });
+    for (const p of team.failing ?? [])
+      docs.set(p.number, { ok: false, rules: p.problems.map((x) => x.rule) });
+  }
+  return docs;
+}
+
+/**
  * Builds per-user statistics.
  * @param {object} input
  * @param {Array} input.prs  {number, state, additions, deletions, author, mergedBy, labels[], reviewers[], commenters[], commits[{oid, message, authors[]}]}, oldest first

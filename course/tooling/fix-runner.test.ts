@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { keepFixedSection } from "./lib/fix-runner.mjs";
+import { keepFixedSection, shouldHide } from "./lib/fix-runner.mjs";
 import { issueCommentFor } from "./lib/issue-fix.mjs";
 import { commentFor } from "./lib/pr-fix.mjs";
 
@@ -28,5 +28,18 @@ describe("keepFixedSection", () => {
     const next = commentFor({ number: 1 }, [], left);
     expect(keepFixedSection(next, undefined)).toBe(next);
     expect(keepFixedSection(null, next)).toBeNull();
+  });
+});
+
+describe("shouldHide (#183)", () => {
+  const comment = { id: "IC_1", isMinimized: false };
+  it("hides this tool's comment once the PR or issue is merged or closed", () => {
+    expect(shouldHide({ state: "MERGED" }, comment)).toBe(true);
+    expect(shouldHide({ state: "CLOSED" }, comment)).toBe(true);
+  });
+  it("keeps it on open items, and does nothing twice or without a comment", () => {
+    expect(shouldHide({ state: "OPEN" }, comment)).toBe(false);
+    expect(shouldHide({ state: "MERGED" }, { ...comment, isMinimized: true })).toBe(false);
+    expect(shouldHide({ state: "MERGED" }, null)).toBe(false);
   });
 });

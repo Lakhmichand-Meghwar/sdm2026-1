@@ -3,6 +3,95 @@
 // `pnpm check:pr`; this file adds what check:pr cannot see from the PR alone: the linked issue's team
 // label and the issue references in the commits.
 import { checkPr } from "../../../server/tooling/workflow/lib/check-pr.mjs";
+import { sectionsOf } from "../../../server/tooling/workflow/lib/template.mjs";
+
+/**
+ * When the rules a PR is judged by came into force (UTC, the merge time of the PR that introduced them).
+ * A PR is judged by the rules in force when it was opened, a commit by those in force when it was made:
+ * a problem against a rule from a later era is "legacy", shown for information and never counted.
+ */
+export const RULE_ERAS = [
+  {
+    since: "2026-11-06T10:47:54Z",
+    pr: 2,
+    what: "first workflow rules in AGENTS.md",
+    rules: ["title", "linked-issue", "issue", "issue-label"],
+  },
+  { since: "2026-11-06T10:53:46Z", pr: 3, what: "the PR template", rules: ["team"] },
+  { since: "2026-11-06T11:41:25Z", pr: 18, what: "the feature/team-N branching workflow", rules: ["base"] },
+  {
+    since: "2026-11-06T13:44:46Z",
+    pr: 61,
+    what: "typed PR templates and check:pr",
+    rules: ["heading", "order", "template", "empty", "checklist", "branch", "labels", "commit-refs"],
+  },
+  // Not a new rule but a stricter one: PRs opened before it keep the "[team-label] Summary" title.
+  { since: "2026-11-06T14:29:27Z", pr: 86, what: "Conventional Commits PR titles", rules: [], titles: true },
+];
+
+/** The era that introduced a rule. */
+const eraOf = (rule) => RULE_ERAS.find((e) => e.rules.includes(rule)) ?? null;
+/** When PR titles had to become Conventional Commits. */
+export const CONVENTIONAL_TITLES_SINCE = RULE_ERAS.find((e) => e.titles)?.since ?? "";
+const before = (date, since) => Boolean(date) && Date.parse(date) < Date.parse(since);
+// The title rule of the first era: "[team-label] Summary".
+const OLD_TITLE = /^\[([^\]]+)\]\s+\S/;
+
+/**
+ * Whether a problem breaks a rule that did not exist yet when the PR was opened. A title only counts as
+ * legacy when it follows the title rule of its own time, "[team-label] Summary".
+ * @param {{ rule: string }} problem
+ * @param {{ title: string, createdAt?: string | null }} pr
+ * @param {string[]} teamLabels
+ */
+export function isLegacy(problem, pr, teamLabels) {
+  const era = eraOf(problem.rule);
+  if (!era) return false;
+  // The rule did not exist yet.
+  if (before(pr.createdAt, era.since)) return true;
+  // The title rule existed, but in its first form: "[team-label] Summary" was right until #86.
+  if (problem.rule !== "title" || !before(pr.createdAt, CONVENTIONAL_TITLES_SINCE)) return false;
+  const old = OLD_TITLE.exec(pr.title.trim());
+  return Boolean(old && teamLabels.includes(old[1]));
+}
+
+// The automatic rules that check the same thing as a checklist item. An "Exception:" under the item
+// covers them too: the author explained why that rule could not be met.
+const ITEM_RULES = [
+  { item: /reference the issue|Refs #N/i, rules: ["commit-refs"] },
+  { item: /\btitle\b/i, rules: ["title"] },
+  { item: /branch is named/i, rules: ["branch"] },
+  // Only "The base branch is correct": "up to date with its base branch" says nothing about the base.
+  { item: /base branch is correct/i, rules: ["base"] },
+  { item: /same team label/i, rules: ["labels", "issue-label"] },
+];
+
+/**
+ * Unticked checklist items, and those with an "Exception: <why>" note right under them. Excepted items
+ * are accepted: the template asks authors to explain an item they can't tick instead of ticking it anyway.
+ * @param {string | null} body
+ * @returns {{ open: number, excepted: string[], exceptedRules: Set<string> }} excepted: the items' texts
+ */
+export function uncheckedItems(body) {
+  const section = sectionsOf(body ?? "").find((s) => s.heading.trim().toLowerCase() === "checklist");
+  /** @type {string[]} */
+  const excepted = [];
+  let open = 0;
+  if (section) {
+    const lines = section.body.split(/\r?\n/);
+    lines.forEach((line, i) => {
+      if (!/^\s*-\s*\[ \]/.test(line)) return;
+      const next = lines.slice(i + 1).find((l) => l.trim() !== "") ?? "";
+      if (/^\s*(?:[-*>]\s*)?\**Exception\**:\s*\S/i.test(next) && !/^\s*-\s*\[[ xX]\]/.test(next))
+        excepted.push(line.replace(/^\s*-\s*\[ \]\s*/, "").trim());
+      else open++;
+    });
+  }
+  const exceptedRules = new Set(
+    excepted.flatMap((text) => ITEM_RULES.filter((m) => m.item.test(text)).flatMap((m) => m.rules)),
+  );
+  return { open, excepted, exceptedRules };
+}
 
 const CLOSING = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i;
 const ANY_REFERENCE = /\b(?:refs|close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)/i;
@@ -40,20 +129,10 @@ export function teamOf(pr, teamLabels) {
 }
 
 /**
- * PR titles follow Conventional Commits ("feat(team-2): add login page") since #86 merged. PRs opened
- * before then got their title under the rule of their time, "[team-2] Add login page", and are judged by it.
- */
-export const TITLE_RULE_CHANGED_AT = "2026-11-06T14:29:27Z";
-
-/** @param {{ createdAt?: string | null }} pr */
-export const allowsLegacyTitle = (pr) =>
-  Boolean(pr.createdAt) && Date.parse(pr.createdAt) < Date.parse(TITLE_RULE_CHANGED_AT);
-
-/**
  * Audits one pull request.
  * @param {{
  *   pr: { number: number, title: string, body: string | null, head: string, base: string, labels: string[], state: string, author: string, url?: string, createdAt?: string | null },
- *   commits: { oid?: string, message: string }[],
+ *   commits: { oid?: string, message: string, committedDate?: string | null }[],
  *   commitsTruncated?: boolean,
  *   issue: { number: number, labels: string[] } | null,
  *   config: { teamLabels: string[] },
@@ -69,13 +148,38 @@ export function auditPr({ pr, commits, commitsTruncated = false, issue, config, 
     labels: pr.labels,
     config,
     templates,
-    allowLegacyTitle: allowsLegacyTitle(pr),
   });
   /** @type {{ rule: string, message: string }[]} */
-  const problems = [...template.problems];
+  const problems = [];
+  /** @type {{ rule: string, message: string }[]} */
+  const legacy = [];
+  /** @type {{ rule: string, message: string }[]} */
+  const accepted = [];
   /** @type {string[]} */
   const warnings = [...template.warnings];
-  const add = (rule, message) => problems.push({ rule, message });
+  // Unticked checklist items with an "Exception:" note are accepted, and so are the rules they cover.
+  const { open, excepted, exceptedRules } = uncheckedItems(pr.body);
+  const add = (rule, message) => {
+    const p = { rule, message };
+    if (isLegacy(p, pr, config.teamLabels)) legacy.push(p);
+    else if (exceptedRules.has(rule)) accepted.push(p);
+    else problems.push(p);
+  };
+  for (const p of template.problems) {
+    if (p.rule === "checklist" && /not ticked/.test(p.message)) {
+      if (open > 0)
+        add(
+          p.rule,
+          `${open} checklist item(s) are not ticked. Tick them, fix what they check, or explain why under the item with "Exception: ...".`,
+        );
+      continue;
+    }
+    add(p.rule, p.message);
+  }
+  if (excepted.length > 0)
+    warnings.push(
+      `Accepted with an "Exception:" note: ${excepted.map((t) => `"${t.slice(0, 60)}"`).join(", ")}.`,
+    );
 
   // A work branch carries the commits of one issue. Integration PRs (feature/team-N into main) and
   // sync/release PRs (from main) carry many issues' commits, so only work PRs are checked here.
@@ -104,16 +208,21 @@ export function auditPr({ pr, commits, commitsTruncated = false, issue, config, 
     const ref = new RegExp(`^\\s*(?:Refs|Closes|Fixes|Resolves)\\s+#${number}\\b`, "im");
     const checked = commits.filter((c) => !EXEMPT_COMMIT.test(c.message));
     const missing = checked.filter((c) => !ref.test(c.message));
-    if (missing.length > 0) {
-      const examples = missing
+    // A commit is judged by the rules in force when it was made, not when its PR was opened.
+    const since = eraOf("commit-refs")?.since;
+    const old = missing.filter((c) => since && before(c.committedDate, since));
+    const current = missing.filter((c) => !old.includes(c));
+    const summarize = (list) =>
+      `${list.length} of ${checked.length} commit(s) do not reference the issue with "Refs #${number}": ${list
         .slice(0, 3)
         .map((c) => `"${c.message.split("\n")[0].slice(0, 60)}"`)
-        .join(", ");
-      add(
-        "commit-refs",
-        `${missing.length} of ${checked.length} commit(s) do not reference the issue with "Refs #${number}": ${examples}${missing.length > 3 ? ", ..." : ""}.`,
-      );
-    }
+        .join(", ")}${list.length > 3 ? ", ..." : ""}.`;
+    if (current.length > 0)
+      (exceptedRules.has("commit-refs") ? accepted : problems).push({
+        rule: "commit-refs",
+        message: summarize(current),
+      });
+    if (old.length > 0) legacy.push({ rule: "commit-refs", message: summarize(old) });
     if (commitsTruncated)
       warnings.push("The PR has more commits than were read; only the first ones were checked.");
   }
@@ -131,6 +240,9 @@ export function auditPr({ pr, commits, commitsTruncated = false, issue, config, 
     linkedIssue: number,
     ok: problems.length === 0,
     problems,
+    legacy,
+    accepted,
+    excepted,
     warnings,
   };
 }
@@ -169,11 +281,13 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 export function formatReport(groups, meta) {
   const total = groups.reduce((n, g) => n + g.total, 0);
   const failing = groups.reduce((n, g) => n + g.failCount, 0);
+  const eras = RULE_ERAS.map((e) => `${e.since.slice(0, 16).replace("T", " ")} UTC (#${e.pr}, ${e.what})`);
   const lines = [
     "# Pull request documentation report",
     "",
     `Repository \`${meta.repo}\`, ${meta.state} pull requests, generated ${meta.generatedAt}.`,
     `${total - failing} of ${plural(total, "pull request")} pass. The rules are the ones in CLAUDE.md and the PR templates (see course/README.md).`,
+    `Each PR is judged by the rules in force when it was opened (rule changes: ${eras.join("; ")}). Problems against later rules are listed as *legacy*, for information only.`,
     "",
     "| Team | PRs | Pass | Fail |",
     "|------|----:|-----:|-----:|",
@@ -183,7 +297,6 @@ export function formatReport(groups, meta) {
     lines.push("", `## ${g.team ?? "(no team)"}`, "");
     if (g.failing.length === 0) {
       lines.push(g.total === 1 ? "The pull request passes." : `All ${g.total} pull requests pass.`);
-      continue;
     }
     for (const r of g.failing) {
       const link = r.url ? `[#${r.number}](${r.url})` : `#${r.number}`;
@@ -193,6 +306,22 @@ export function formatReport(groups, meta) {
     }
     if (!meta.failingOnly && g.passing.length > 0)
       lines.push("", `Passing: ${g.passing.map((r) => `#${r.number}`).join(", ")}`);
+    const withLegacy = [...g.failing, ...g.passing].filter((r) => r.legacy?.length);
+    if (!meta.failingOnly && withLegacy.length > 0) {
+      lines.push("", "Legacy, not counted (rules introduced after the PR was opened):");
+      for (const r of withLegacy.sort((a, b) => b.number - a.number))
+        lines.push(`- #${r.number}: ${[...new Set(r.legacy.map((p) => p.rule))].join(", ")}`);
+    }
+    // Failing PRs already show their exceptions as warnings; passing ones would otherwise hide them.
+    const withExceptions = g.passing.filter((r) => r.excepted?.length);
+    if (!meta.failingOnly && withExceptions.length > 0) {
+      lines.push("", 'Passing with an "Exception:" note (check the reason):');
+      for (const r of withExceptions.sort((a, b) => b.number - a.number)) {
+        const rules = [...new Set((r.accepted ?? []).map((p) => p.rule))];
+        const items = r.excepted.map((t) => `"${t.slice(0, 60)}"`).join(", ");
+        lines.push(`- #${r.number}: ${items}${rules.length ? ` (accepts ${rules.join(", ")})` : ""}`);
+      }
+    }
   }
   return `${lines.join("\n")}\n`;
 }

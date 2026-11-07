@@ -54,7 +54,7 @@ const nodes = paginate(
           number title url state
           author { login }
           labels(first: 30) { nodes { name } }
-          comments(last: 50) { nodes { databaseId body viewerDidAuthor } }
+          comments(last: 50) { nodes { id databaseId body viewerDidAuthor isMinimized } }
         }
       }
     }
@@ -80,7 +80,10 @@ const selected = team ? entries.filter((e) => e.result.team === team) : entries;
 if (flags.fix === true) {
   const items = selected
     .filter((e) => !e.result.ok || e.ownComment)
-    .map((e) => ({ plan: planIssueFix({ issue: e.issue, config }), ownComment: e.ownComment }));
+    .map((e) => ({
+      plan: planIssueFix({ issue: e.issue, config, hadComment: Boolean(e.ownComment) }),
+      ownComment: e.ownComment,
+    }));
   const { failed } = runFixes({ root, repo, kind: "issue", apply: flags.apply === true, items });
   // exitCode, not process.exit(): on macOS and Linux stdout to a pipe is asynchronous, and exit() would cut it off.
   process.exitCode = failed > 0 ? EXIT.failed : EXIT.ok;
