@@ -16,7 +16,7 @@ pnpm workflow:classify --kind issue --json
 ```
 
 - It looks at the uncommitted changes. Use `--staged` for staged changes, or `--base <ref>` for the commits of a branch. If there are no changes yet, pass what you know: `--title "fix: <summary>"` or `--type <feature|bug|docs|chore|refactor>`.
-- It returns `type`, `label` (the team label), `template` and `githubLabels`.
+- It returns `type`, `label` (the team label) and `template`.
 - **Exit code 1 means it could not decide** (`undecided: true`, with `candidates`). Ask the user which type it is, then re-run with `--type <their answer>`. Do not guess.
 - If it reports several owners for the changed files, tell the user the change must be split (one issue, one team label), or pass `--label` if the user names the owner.
 
@@ -34,7 +34,7 @@ Read the file named in `template`. Write the issue body to a scratch file (not i
 ## 3. Check
 
 ```bash
-pnpm check:issue --file <body-file> --title "<title>" --labels <label>,<githubLabel> --type <type>
+pnpm check:issue --file <body-file> --title "<title>" --labels <label> --type <type>
 ```
 
 Fix every reported problem and re-run. After three failed rounds, stop and show the user the remaining messages.
@@ -42,7 +42,7 @@ Fix every reported problem and re-run. After three failed rounds, stop and show 
 ## 4. Create
 
 ```bash
-gh issue create --title "<title>" --body-file <body-file> --label <label> --label <githubLabel>
+gh issue create --title "<title>" --body-file <body-file> --label <label>
 ```
 
-Use the labels from `githubLabels` in step 1. Report the issue URL. Do not assign anyone or add labels beyond those unless the user asks.
+Add only the team label from step 1; the repo has no type labels (see "Labels" in CLAUDE.md). Report the issue URL. Do not assign anyone or add labels beyond those unless the user asks.

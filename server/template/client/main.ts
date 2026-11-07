@@ -1,7 +1,8 @@
 /**
  * Template game client. Deliberately minimal: a lobby (create, or join by code), a Canvas 2D view
- * and keyboard input. The full client core (prediction, interpolation, debug console, F8) comes
- * from @sdm/core/client in #13; teams replace this file with their own lobby and renderer.
+ * and keyboard input, plus the ~ debug overlay and its console from @sdm/core/client. The rest of the
+ * client core (prediction, interpolation, F8) comes in #13; teams replace this file with their own
+ * lobby and renderer.
  */
 import { Client, type Room } from "@colyseus/sdk";
 import {
@@ -13,6 +14,8 @@ import {
   readClientParams,
 } from "@sdm/core/client";
 import {
+  ClientMessage,
+  type DebugResult,
   HealthResponseSchema,
   JoinByCodeResponseSchema,
   type Notice,
@@ -110,14 +113,19 @@ function play(room: Room<SampleState>, health: BuildInfo): void {
   room.onMessage(ServerMessage.Notice, (notice: Notice) => {
     showMessage(notice.text);
   });
+  // The ~ overlay includes a debug console: commands go to the room, replies come back as debug:result.
+  const overlay = createDebugOverlay({
+    build: health,
+    startOpen: params.debug,
+    console: { send: (command) => room.send(ClientMessage.DebugCommand, command) },
+  });
   room.onMessage(ServerMessage.DebugStats, () => {});
-  room.onMessage(ServerMessage.DebugResult, () => {});
+  room.onMessage(ServerMessage.DebugResult, (result: DebugResult) => overlay.handleDebugResult(result));
   room.onLeave(() => {
     left = true;
     showMessage("Disconnected. Refresh to rejoin.");
   });
 
-  const overlay = createDebugOverlay({ build: health, startOpen: params.debug });
   const meter = createFrameMeter(performance.now());
   const axis = (neg: string[], pos: string[]) =>
     (pos.some((k) => keys.has(k)) ? 1 : 0) - (neg.some((k) => keys.has(k)) ? 1 : 0);

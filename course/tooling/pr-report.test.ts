@@ -57,10 +57,14 @@ describe("linkedIssue", () => {
 describe("teamOf", () => {
   const labels = config.teamLabels;
   it("prefers the team label", () => {
-    expect(teamOf({ title: "[team-1] X", head: "team-1/1-x", labels: ["team-3"] }, labels)).toBe("team-3");
+    expect(teamOf({ title: "feat(team-1): x", head: "team-1/1-x", labels: ["team-3"] }, labels)).toBe(
+      "team-3",
+    );
   });
-  it("falls back to the title, then the branch", () => {
+  it("falls back to the title scope, then the old [team-N] prefix, then the branch", () => {
+    expect(teamOf({ title: "feat(team-1): x", head: "x", labels: [] }, labels)).toBe("team-1");
     expect(teamOf({ title: "[team-1] X", head: "x", labels: [] }, labels)).toBe("team-1");
+    expect(teamOf({ title: "feat(team-2): x", head: "team-1/1-x", labels: [] }, labels)).toBe("team-2");
     expect(teamOf({ title: "X", head: "platform/4-x", labels: [] }, labels)).toBe("platform");
     expect(teamOf({ title: "X", head: "feature/team-4", labels: [] }, labels)).toBe("team-4");
   });
@@ -71,6 +75,7 @@ describe("teamOf", () => {
   });
   it("returns null when nothing names a team", () => {
     expect(teamOf({ title: "[course] X", head: "1-x", labels: ["documentation"] }, labels)).toBeNull();
+    expect(teamOf({ title: "feat(course): x", head: "1-x", labels: [] }, labels)).toBeNull();
   });
 });
 

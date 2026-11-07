@@ -4,8 +4,12 @@
  * `?scenario=crowded` load a QA scenario, `?debug` open the debug overlay at start.
  */
 
-/** Room codes are four letters. Keep in sync with the server's room codes (#12). */
-const ROOM_CODE_PATTERN = /^[A-Z]{4}$/;
+/**
+ * Room codes are four letters from A–Z without I and O, exactly what the server generates
+ * (`ROOM_CODE_ALPHABET` in server/roomCodes.ts; a test keeps the two in sync). Rejecting the
+ * rest here gives the player an instant error instead of a "room not found" from the server.
+ */
+const ROOM_CODE_PATTERN = /^[A-HJ-NP-Z]{4}$/;
 export const MAX_NAME_LENGTH = 24;
 const DEBUG_OFF_VALUES = ["0", "false", "off"];
 

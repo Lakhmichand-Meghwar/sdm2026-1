@@ -5,44 +5,37 @@
     "feature": {
       "issueTemplate": ".github/ISSUE_TEMPLATE/feature.md",
       "prTemplate": ".github/PULL_REQUEST_TEMPLATE/feature.md",
-      "commitTypes": ["feat"],
-      "githubLabel": "enhancement"
+      "commitTypes": ["feat"]
     },
     "bug": {
       "issueTemplate": ".github/ISSUE_TEMPLATE/bug.md",
       "prTemplate": ".github/PULL_REQUEST_TEMPLATE/bug.md",
-      "commitTypes": ["fix"],
-      "githubLabel": "bug"
+      "commitTypes": ["fix"]
     },
     "docs": {
       "issueTemplate": ".github/ISSUE_TEMPLATE/docs.md",
       "prTemplate": ".github/PULL_REQUEST_TEMPLATE/docs.md",
-      "commitTypes": ["docs"],
-      "githubLabel": "documentation"
+      "commitTypes": ["docs"]
     },
     "chore": {
       "issueTemplate": ".github/ISSUE_TEMPLATE/chore.md",
       "prTemplate": ".github/PULL_REQUEST_TEMPLATE/chore.md",
-      "commitTypes": ["chore", "ci", "build", "test", "perf"],
-      "githubLabel": null
+      "commitTypes": ["chore", "ci", "build", "test", "perf"]
     },
     "refactor": {
       "issueTemplate": ".github/ISSUE_TEMPLATE/refactor.md",
       "prTemplate": ".github/PULL_REQUEST_TEMPLATE/refactor.md",
-      "commitTypes": ["refactor"],
-      "githubLabel": null
+      "commitTypes": ["refactor"]
     },
     "release": {
       "issueTemplate": null,
       "prTemplate": ".github/PULL_REQUEST_TEMPLATE/release.md",
-      "commitTypes": [],
-      "githubLabel": null
+      "commitTypes": []
     },
     "sync": {
       "issueTemplate": null,
       "prTemplate": ".github/PULL_REQUEST_TEMPLATE/sync.md",
-      "commitTypes": [],
-      "githubLabel": null
+      "commitTypes": []
     }
   },
   "commitPrefixToType": {

@@ -4,6 +4,8 @@
  * Disabled in production (see isDebugEnabled).
  */
 import { type AppEnv, isDebugEnabled } from "../shared/env.ts";
+import type { DebugCommand, DebugResult } from "../shared/messages.ts";
+import { createCommandHistory, createConsoleTranscript, parseDebugCommand } from "./debugConsole.ts";
 
 export interface BuildInfo {
   readonly env: AppEnv;
@@ -30,8 +32,15 @@ export interface DebugOverlay {
   readonly isOpen: boolean;
   /** Call every frame; the text is redrawn at most a few times a second. */
   update(stats: DebugStats, extras?: DebugExtras, now?: number): void;
+  /** Pass every `debug:result` message from the room here, so the console shows the reply. */
+  handleDebugResult(result: DebugResult): void;
   toggle(): void;
   destroy(): void;
+}
+
+export interface DebugConsoleOptions {
+  /** Sends a command to the room, e.g. `(cmd) => room.send(ClientMessage.DebugCommand, cmd)`. */
+  readonly send: (command: DebugCommand) => void;
 }
 
 export interface DebugOverlayOptions {
@@ -42,6 +51,8 @@ export interface DebugOverlayOptions {
   readonly parent?: HTMLElement;
   /** Where to listen for the ~ key. Defaults to window. */
   readonly keyTarget?: Window;
+  /** Adds a command box under the stats. Leave it out when there is no room to talk to. */
+  readonly console?: DebugConsoleOptions;
 }
 
 const LABEL_WIDTH = 8;
@@ -52,27 +63,43 @@ const REFRESH_MS = 250;
 const TOGGLE_CODE = "Backquote";
 const TOGGLE_CHARACTERS = ["`", "~"];
 
-const PANEL_STYLE: Partial<CSSStyleDeclaration> = {
+const FONT = "13px/1.4 ui-monospace, Consolas, Menlo, monospace";
+const TEXT_COLOR = "#b8f5c8";
+const CONSOLE_WIDTH = "360px";
+const CONSOLE_OUTPUT_HEIGHT = "160px";
+
+const CONTAINER_STYLE: Partial<CSSStyleDeclaration> = {
   position: "fixed",
   top: "8px",
   right: "8px",
   zIndex: "9999",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-end",
+  gap: "6px",
+  pointerEvents: "none",
+};
+
+const BOX_STYLE: Partial<CSSStyleDeclaration> = {
   margin: "0",
   padding: "10px 12px",
   borderRadius: "6px",
   background: "rgba(10, 12, 20, 0.85)",
-  color: "#b8f5c8",
-  font: "13px/1.4 ui-monospace, Consolas, Menlo, monospace",
-  pointerEvents: "none",
+  color: TEXT_COLOR,
+  font: FONT,
   whiteSpace: "pre",
 };
 
 const NO_OVERLAY: DebugOverlay = {
   isOpen: false,
   update() {},
+  handleDebugResult() {},
   toggle() {},
   destroy() {},
 };
+
+const isToggleKey = (event: KeyboardEvent): boolean =>
+  event.code === TOGGLE_CODE || TOGGLE_CHARACTERS.includes(event.key);
 
 export function formatDebugLines(build: BuildInfo, stats: DebugStats, extras: DebugExtras = {}): string[] {
   const lines: [string, string][] = [
@@ -95,21 +122,25 @@ export function createDebugOverlay(options: DebugOverlayOptions): DebugOverlay {
   if (!isDebugEnabled(options.build.env)) return NO_OVERLAY;
 
   const keyTarget = options.keyTarget ?? window;
-  const panel = document.createElement("pre");
-  Object.assign(panel.style, PANEL_STYLE);
-  panel.hidden = !options.startOpen;
-  (options.parent ?? document.body).append(panel);
+  const container = document.createElement("div");
+  Object.assign(container.style, CONTAINER_STYLE);
+  container.hidden = !options.startOpen;
+  const statsPanel = document.createElement("pre");
+  Object.assign(statsPanel.style, BOX_STYLE);
+  container.append(statsPanel);
 
   let lastRefreshAt = Number.NEGATIVE_INFINITY;
-
   const toggle = (): void => {
-    panel.hidden = !panel.hidden;
+    container.hidden = !container.hidden;
     lastRefreshAt = Number.NEGATIVE_INFINITY; // show fresh numbers as soon as it opens
   };
 
+  const commandBox = options.console ? createCommandBox(options.console, toggle) : null;
+  if (commandBox) container.append(commandBox.element);
+  (options.parent ?? document.body).append(container);
+
   const onKeyDown = (event: KeyboardEvent): void => {
-    const isToggleKey = event.code === TOGGLE_CODE || TOGGLE_CHARACTERS.includes(event.key);
-    if (!isToggleKey || event.repeat || isTyping(event.target)) return;
+    if (!isToggleKey(event) || event.repeat || isTyping(event.target)) return;
     event.preventDefault();
     toggle();
   };
@@ -117,17 +148,113 @@ export function createDebugOverlay(options: DebugOverlayOptions): DebugOverlay {
 
   return {
     get isOpen() {
-      return !panel.hidden;
+      return !container.hidden;
     },
     update(stats, extras, now = performance.now()) {
-      if (panel.hidden || now - lastRefreshAt < REFRESH_MS) return;
+      if (container.hidden || now - lastRefreshAt < REFRESH_MS) return;
       lastRefreshAt = now;
-      panel.textContent = formatDebugLines(options.build, stats, extras).join("\n");
+      statsPanel.textContent = formatDebugLines(options.build, stats, extras).join("\n");
+    },
+    handleDebugResult(result) {
+      commandBox?.handleResult(result);
     },
     toggle,
     destroy() {
       keyTarget.removeEventListener("keydown", onKeyDown);
-      panel.remove();
+      container.remove();
+    },
+  };
+}
+
+interface CommandBox {
+  readonly element: HTMLElement;
+  handleResult(result: DebugResult): void;
+}
+
+/** The console's text box and output. Keys typed here never reach the game. */
+function createCommandBox(consoleOptions: DebugConsoleOptions, toggleOverlay: () => void): CommandBox {
+  const transcript = createConsoleTranscript();
+  const history = createCommandHistory();
+  let nextId = 1;
+
+  const element = document.createElement("form");
+  Object.assign(element.style, BOX_STYLE, {
+    width: CONSOLE_WIDTH,
+    pointerEvents: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  });
+  const output = document.createElement("pre");
+  Object.assign(output.style, {
+    margin: "0",
+    maxHeight: CONSOLE_OUTPUT_HEIGHT,
+    overflowY: "auto",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+  });
+  output.textContent = "Debug console: type a command (pause, step 5, set player.speed 300) and press Enter.";
+  const input = document.createElement("input");
+  input.setAttribute("aria-label", "Debug command");
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.placeholder = "command";
+  Object.assign(input.style, {
+    font: FONT,
+    color: TEXT_COLOR,
+    background: "rgba(255, 255, 255, 0.06)",
+    border: "1px solid rgba(184, 245, 200, 0.3)",
+    borderRadius: "4px",
+    padding: "4px 6px",
+  });
+  element.append(output, input);
+
+  const render = (): void => {
+    output.textContent = transcript.lines.join("\n");
+    output.scrollTop = output.scrollHeight;
+  };
+
+  element.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const line = input.value;
+    input.value = "";
+    history.push(line);
+    const parsed = parseDebugCommand(line);
+    if (parsed.ok) {
+      const id = `dc-${nextId++}`;
+      transcript.sent(id, line.trim());
+      consoleOptions.send({ id, command: parsed.command, args: parsed.args });
+    } else {
+      transcript.note(parsed.error);
+    }
+    render();
+  });
+
+  // Keys typed in the box stay here, so typing "step" doesn't also move the player.
+  const keepKeysHere = (event: KeyboardEvent): void => event.stopPropagation();
+  input.addEventListener("keyup", keepKeysHere);
+  input.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (isToggleKey(event)) {
+      event.preventDefault();
+      input.blur();
+      toggleOverlay();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      input.value = history.previous();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      input.value = history.next();
+    } else if (event.key === "Escape") {
+      input.blur();
+    }
+  });
+
+  return {
+    element,
+    handleResult(result) {
+      transcript.received(result);
+      render();
     },
   };
 }

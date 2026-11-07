@@ -97,7 +97,7 @@ if (!result.undecided && result.ok) {
   const t = config.types[result.type];
   result.template = kind === "issue" ? t.issueTemplate : kind === "pr" ? t.prTemplate : null;
   result.commitTypes = t.commitTypes;
-  result.githubLabels = [result.label, t.githubLabel].filter(Boolean);
+  result.githubLabels = [result.label].filter(Boolean);
   if (kind === "issue" && !result.template) {
     result.ok = false;
     result.errors.push(`Type "${result.type}" has no issue template.`);

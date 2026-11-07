@@ -2,7 +2,6 @@
 name: Chore
 about: Tooling, CI, dependencies or housekeeping with no change to game behaviour
 title: "[team-label] "
-labels: ""
 ---
 
 <!--

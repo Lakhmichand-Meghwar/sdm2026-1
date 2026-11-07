@@ -22,6 +22,8 @@
     "check:issue": "node server/tooling/workflow/check-issue.mjs",
     "check:pr": "node server/tooling/workflow/check-pr.mjs",
     "check:commit": "node server/tooling/workflow/check-commit.mjs",
+    "labels:sync": "node server/tooling/workflow/labels-sync.mjs",
+    "labels:prs": "node server/tooling/workflow/pr-labels.mjs",
     "check:branch": "node server/tooling/workflow/check-branch.mjs",
     "check:ownership": "node server/tooling/workflow/check-ownership.mjs",
     "check:files": "node server/tooling/workflow/check-files.mjs",
@@ -34,10 +36,12 @@
     "preflight:quick": "node server/tooling/workflow/preflight.mjs --quick",
     "qa:bots": "node scripts/qa/bots.mjs",
     "qa:multi": "node scripts/qa/multi.mjs",
-    "qa:load": "pnpm dlx @colyseus/loadtest@0.18.4 scripts/qa/load.ts --endpoint ws://localhost:2567 --room sample_room --numClients 50"
+    "qa:load": "pnpm dlx @colyseus/loadtest@0.18.4 scripts/qa/load.ts --endpoint ws://localhost:2567 --room sample_room --numClients 50",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5",
+    "@playwright/test": "^1.65.0",
     "@types/node": "22.20.5",
     "colyseus.js": "^0.16.22",
     "playwright": "^1.65.0",

@@ -2,7 +2,6 @@
 name: Refactor
 about: Restructure code without changing what it does
 title: "[team-label] "
-labels: ""
 ---
 
 <!--

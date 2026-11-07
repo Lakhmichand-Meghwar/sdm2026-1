@@ -78,7 +78,7 @@ It needs the [GitHub CLI](https://cli.github.com/), logged in with `gh auth logi
 
 A PR passes when all of this is true (the rules from [CLAUDE.md](../CLAUDE.md) and the PR templates):
 
-- The title starts with `[<team-label>]`, and the PR has exactly one team label, the same one.
+- The title is in the commit format with the team label as its scope, for example `feat(team-2): add login page`, and the PR has exactly one team label, the same one.
 - The branch is named `<team-label>/<issue-number>-<short-description>` and targets the right base branch.
 - The description follows its template in `.github/PULL_REQUEST_TEMPLATE/`: every heading is present, in order and filled in, `## Linked issue` has `Closes #N`, `## Team` names the team, and every checklist item is ticked. This part is the same check as `pnpm check:pr --number <N>`.
 - The linked issue exists and has the same team label as the PR.
@@ -88,7 +88,7 @@ Sync and release PRs (from `main`) and integration PRs (`feature/team-N` into `m
 
 **During the hackathon:** run `node course/tooling/pr-report.mjs --state open --failing` now and then, and fix what it lists (edit the PR description, add the label, retarget the base branch). Commits that are already pushed don't have to be rewritten; reference the issue in the next ones.
 
-**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. PRs merged before a rule existed (for example, before the checklist grew to ten items) fail that rule; take that into account when weighting the result.
+**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. PRs merged before a rule existed (for example, titles like `[team-2] Add login` from before the commit format, or a checklist from before it grew to ten items) fail that rule; take that into account when weighting the result. The report still attributes such PRs to their team through the old `[team-N]` prefix.
 
 #### Fixing PRs automatically
 

@@ -15,7 +15,7 @@ These rules apply to every agent (and every human) working in this repository. T
 | `course/`       | Instructors | `team-instructor` |
 | `server/`       | Platform    | `platform`        |
 
-Work inside your own team's folder. Changes to another team's folder or to the shared folders need an issue that says why, and a review from someone on the owning team.
+Work inside your own team's folder. Changes to another team's folder or to the shared folders need an issue that says why, on a line of its own (`Cross-team: <why>`), and a review from someone on the owning team.
 
 ## Tech stack
 
@@ -165,7 +165,24 @@ Issues, pull requests and commits follow templates. **A script chooses the type,
 - Every template heading is required, in order, and must be filled in. Write `None` if a section does not apply.
 - The skills live in `.claude/skills/`. The rules and their rationale are in `server/tooling/workflow/`.
 
-**Before opening a PR, run `pnpm preflight`; it must pass.** It runs lint, typecheck, tests and the build, then checks the branch (name, base, linked issue), folder ownership, commit messages, committed files, secrets, docs links, game config and simulation determinism, and says how to fix each failure. Agents run `pnpm preflight:quick` (lint, typecheck, ownership) after every change. CI runs the same checks on every PR. Files owned by another team are only allowed when the issue has the `cross-team` label and explains why.
+**Before opening a PR, run `pnpm preflight`; it must pass.** It runs lint, typecheck, tests and the build, then checks the branch (name, base, linked issue), folder ownership, commit messages, committed files, secrets, docs links, game config and simulation determinism, and says how to fix each failure. Agents run `pnpm preflight:quick` (lint, typecheck, ownership) after every change. CI runs the same checks on every PR. Files owned by another team are only allowed when the issue explains why on a line of its own: `Cross-team: <why>`.
+
+## Labels
+
+The repo has only two kinds of labels; there are no type, size or priority labels. Every label is defined in `server/tooling/workflow/labels.json`, and `pnpm labels:sync` makes GitHub match it (dry run by default, `--apply` to change). Don't create labels by hand.
+
+| Labels | Rule | Set by |
+|---|---|---|
+| `team-1` … `team-4`, `platform`, `team-instructor` | exactly one on every issue and PR | you |
+| `stackpile`, `waiting-on.author`, `waiting-on.review`, `waiting-on.merge` | on open PRs only | the labeller |
+
+The **labeller** (`pnpm labels:prs`, the "PR labels" workflow) runs every 10 minutes and whenever a PR or review changes. It only touches these four labels, and removes them when a PR is closed or merged:
+
+- `stackpile`: the PR is stacked on another PR (its base isn't `main`, `prod` or a `feature/team-N` branch). It merges after the PR below it.
+- Exactly one waiting label, checked in this order:
+  1. `waiting-on.author`: a reviewer requested changes, a review thread is unresolved, or the PR is a draft. The author pushes fixes, resolves the threads, or marks the PR ready.
+  2. `waiting-on.review`: no approving review from someone other than the author yet. A teammate reviews it.
+  3. `waiting-on.merge`: approved with nothing open. Whoever merges for the team merges it.
 
 ## Never
 

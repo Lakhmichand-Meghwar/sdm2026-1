@@ -50,17 +50,22 @@ function refFor(base) {
 /**
  * Looks an issue up with the GitHub CLI. Returns null when it doesn't exist.
  * @param {number} number
- * @returns {{ number: number, state: string, labels: string[] } | null}
+ * @returns {{ number: number, state: string, labels: string[], body: string } | null}
  */
 export function getIssue(number) {
   try {
-    const out = execFileSync("gh", ["issue", "view", String(number), "--json", "number,state,labels"], {
+    const out = execFileSync("gh", ["issue", "view", String(number), "--json", "number,state,labels,body"], {
       cwd: root,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
     const data = JSON.parse(out);
-    return { number: data.number, state: data.state, labels: data.labels.map((l) => l.name) };
+    return {
+      number: data.number,
+      state: data.state,
+      labels: data.labels.map((l) => l.name),
+      body: data.body ?? "",
+    };
   } catch (err) {
     const stderr = err.stderr?.toString() ?? "";
     if (/not found|Could not resolve/i.test(stderr)) return null;
