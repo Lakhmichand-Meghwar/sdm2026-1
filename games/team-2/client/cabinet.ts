@@ -82,14 +82,14 @@ function clank(context: AudioContext, at: number, out: AudioNode) {
   }
 }
 
-/** A metal cabinet door creaking open on rusty hinges and knocking to a stop. */
-export function playCabinet() {
+/** A metal cabinet door creaking open on rusty hinges and knocking to a stop, `delay` seconds from now. */
+export function playCabinet(delay = 0) {
   const context = audio();
   if (!context) return;
   const out = context.createGain();
   out.gain.value = 0.5;
   out.connect(context.destination);
-  const now = context.currentTime;
+  const now = context.currentTime + delay;
   creak(context, now, out);
   clank(context, now + creakSeconds - 0.05, out);
 }

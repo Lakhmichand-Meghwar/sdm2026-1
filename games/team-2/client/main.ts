@@ -13,6 +13,7 @@ import { canvasSlashed, playCanvasSlash } from "./canvas.ts";
 import { playDrawer } from "./drawer.ts";
 import { playFootsteps, unlockAudio, walkers } from "./footsteps.ts";
 import { ghostPresent, setGhostPresence } from "./ghost.ts";
+import { keyUnlockSeconds, playKeyUnlock } from "./key.ts";
 import { knifeTaken, playKnife } from "./knife.ts";
 import "./style.css";
 
@@ -210,7 +211,10 @@ function render(state: EscapeSnapshot) {
     setDrawer(false);
   }
   for (const id of walkers(snapshot?.patients, state.patients)) playFootsteps(id === room?.sessionId);
-  if (cabinetOpened(snapshot, state)) playCabinet();
+  if (cabinetOpened(snapshot, state)) {
+    playKeyUnlock();
+    playCabinet(keyUnlockSeconds);
+  }
   if (knifeTaken(snapshot, state)) playKnife();
   if (canvasSlashed(snapshot, state)) playCanvasSlash();
   setGhostPresence(ghostPresent(state));
