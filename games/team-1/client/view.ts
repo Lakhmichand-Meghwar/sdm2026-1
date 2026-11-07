@@ -1,8 +1,8 @@
 /** Turns the room state into UI. Called on every state patch, so everything here is idempotent. */
-import { buildInviteLink } from "@sdm/core/client";
 import { timeLoopGame } from "../shared/game.ts";
 import type { GameEvent, TimeLoopState } from "../shared/index.ts";
 import { CODE_DIGITS, type CodeKind, LEVEL_COUNT, levelInfo, ROLE_SOLO, ROLE_TEXT } from "../shared/rules.ts";
+import { currentInviteLink } from "./invite.ts";
 import { TAPS } from "./targets.ts";
 import * as ui from "./ui.ts";
 
@@ -107,6 +107,7 @@ function renderRoom(state: TimeLoopState, me: number): void {
   ui.setTimer(state.timeLeft, duration);
   ui.setLoop(state.loop);
   ui.setRoomCode(state.code);
+  ui.setInvite(!state.solo && state.code ? currentInviteLink(state.code) : null);
   const mine = Array.from(me === 2 ? state.clues2 : state.clues1);
   const theirs = Array.from(me === 2 ? state.clues1 : state.clues2);
   ui.renderClues(mine, theirs, level, !state.solo);
@@ -146,7 +147,7 @@ export function render(state: TimeLoopState, sessionId: string): void {
   ui.showMain(phase === "won" ? "win" : "game");
   switch (phase) {
     case "waiting":
-      ui.setWait(state.code, state.code ? buildInviteLink(location.href, state.code) : "");
+      ui.setWait(state.code, state.code ? currentInviteLink(state.code) : "");
       ui.setOverlay("wait");
       break;
     case "briefing": {

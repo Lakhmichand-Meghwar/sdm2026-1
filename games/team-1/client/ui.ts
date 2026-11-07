@@ -176,6 +176,12 @@ export function setPlayerCard(slot: 1 | 2, card: PlayerCard): void {
   setClass(`p${slot}-slot`, "has-item", card.holdsKey);
 }
 
+/** The invite link in the top bar, or hidden when there is nobody to invite. */
+export function setInvite(link: string | null): void {
+  setHidden("invite", link === null);
+  if (link !== null) setText("invite-link", link);
+}
+
 /** Playing alone: there is no partner card. */
 export function setSolo(solo: boolean): void {
   setClass("bottom-hud", "solo", solo);
