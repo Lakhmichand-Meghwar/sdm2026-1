@@ -22,9 +22,9 @@ This starts the game server on port 2567 and the client on port 5173.
 - **Same computer:** open http://localhost:5173 in two browser windows, create a room in one, and join with the 4-letter code in the other.
 - **Two devices on the same network:** open `http://<your-computer-ip>:5173` on both. The client talks to the server on the same host, port 2567.
 
-### Playing alone with a bot
+### Playing alone
 
-In the lobby, press **Play with a bot**. The bot is the second detective. It does its own jobs once you have done yours (it can see what you have read), and it tells you what it reads. A friend can still join the room with its code and take the bot's seat, keeping its journal.
+In the lobby, press **Play alone**. You are the only detective: everything in every room is yours to use, there is no partner and no "Tell partner", and the keypad in the Archive takes the whole code (month, then day). The clock only needs you. If somebody joins the room by its code, the room becomes a two-player room and you each get your own jobs from then on.
 
 ### Where things are
 
@@ -32,7 +32,7 @@ In the lobby, press **Play with a bot**. The bot is the second detective. It doe
 |---|---|
 | `shared/rules.ts` | Levels, clues, codes, puzzle answers and who owns each object (`OWNER`) |
 | `shared/index.ts` | Room state, inputs and config schema |
-| `shared/game.ts` | The rules: one deterministic `step` for both players, and the bot |
+| `shared/game.ts` | The rules: one deterministic `step` for both players |
 | `config/game.json` | Timers, penalties and tuning values |
 | `room/`, `server.ts` | The Colyseus room and server entry |
 | `client/` | Lobby, intro, room scenes and HUD |

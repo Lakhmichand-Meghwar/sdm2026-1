@@ -7,6 +7,8 @@ export interface LevelInfo {
   name: string;
   story: string;
   rule: string;
+  /** The rule text when one player plays alone. */
+  soloRule: string;
 }
 
 export const LEVEL_INFO: readonly LevelInfo[] = [
@@ -15,18 +17,21 @@ export const LEVEL_INFO: readonly LevelInfo[] = [
     name: "The Office",
     story: "A rain-soaked detective office. The exit is locked behind a laptop.",
     rule: "Find the year and unlock the exit door. You each reach only some things, so tell each other what you find.",
+    soloRule: "Find the year and unlock the exit door.",
   },
   {
     id: 2,
     name: "The Archive",
     story: "Rows of shelves and a locked filing cabinet. Someone left a case open.",
     rule: "A wrong move costs time. The keypad has two halves: you each type in what your partner found.",
+    soloRule: "A wrong move costs time. The keypad takes the month, then the day.",
   },
   {
     id: 3,
     name: "The Vault",
     story: "No windows, no lights. The safe holds the way out.",
     rule: "Each of you works one side of the power panel. The safe needs something one of you learned in the first room.",
+    soloRule: "Restore the power, then open the safe. It needs something you learned in the first room.",
   },
 ];
 
@@ -163,3 +168,5 @@ export const ROLE_TEXT: Record<number, Record<1 | 2, string>> = {
     2: "You read the poster, flip the two right switches and open the safe.",
   },
 };
+
+export const ROLE_SOLO = "You are on your own: everything in the room is yours to use.";

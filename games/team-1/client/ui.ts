@@ -80,7 +80,7 @@ export function setLobbyError(text: string): void {
 }
 
 export function setLobbyBusy(busy: boolean): void {
-  for (const id of ["lobby-create", "lobby-bot", "lobby-join"]) el<HTMLButtonElement>(id).disabled = busy;
+  for (const id of ["lobby-create", "lobby-solo", "lobby-join"]) el<HTMLButtonElement>(id).disabled = busy;
 }
 
 export function setWait(code: string, link: string): void {
@@ -100,6 +100,7 @@ export function setBrief(
   duration: number,
   penalty: number,
   previous: string,
+  rule: string,
   role: string,
   iAmReady: boolean,
 ): void {
@@ -110,7 +111,7 @@ export function setBrief(
   setText("brief-story", info.story);
   setText("brief-time", `${duration}s`);
   setText("brief-penalty", `${penalty}s`);
-  setText("brief-rule", info.rule);
+  setText("brief-rule", rule);
   setText("brief-role", role);
   el<HTMLButtonElement>("brief-go").disabled = iAmReady;
   setHidden("brief-wait", !iAmReady);
@@ -175,27 +176,39 @@ export function setPlayerCard(slot: 1 | 2, card: PlayerCard): void {
   setClass(`p${slot}-slot`, "has-item", card.holdsKey);
 }
 
+/** Playing alone: there is no partner card. */
+export function setSolo(solo: boolean): void {
+  setClass("bottom-hud", "solo", solo);
+}
+
 export function setBanner(text: string | null): void {
   setHidden("partner-banner", text === null);
   if (text !== null) setText("partner-banner", text);
 }
 
-export function renderClues(mine: readonly string[], theirs: readonly string[], level: number): void {
+export function renderClues(
+  mine: readonly string[],
+  theirs: readonly string[],
+  level: number,
+  canShare: boolean,
+): void {
   const list = el<HTMLUListElement>("clue-list");
-  const key = `${level}:${mine.join(",")}|${theirs.join(",")}`;
+  const key = `${level}:${canShare}:${mine.join(",")}|${theirs.join(",")}`;
   if (list.dataset.key === key) return;
   list.dataset.key = key;
   if (mine.length === 0) {
-    list.innerHTML = `<li class="clue-empty">Your journal is empty. What you read goes here, and only you see it.</li>`;
+    list.innerHTML = `<li class="clue-empty">${canShare ? "Your journal is empty. What you read goes here, and only you see it." : "No clues yet. What you read goes here."}</li>`;
     return;
   }
   list.innerHTML = mine
     .filter(isClueId)
     .map((id) => {
       const clue = CLUE_DEFS[id];
-      const action = theirs.includes(id)
-        ? `<span class="clue-tag">your partner knows</span>`
-        : `<button type="button" class="clue-share" data-clue="${id}">Tell partner</button>`;
+      const action = !canShare
+        ? ""
+        : theirs.includes(id)
+          ? `<span class="clue-tag">your partner knows</span>`
+          : `<button type="button" class="clue-share" data-clue="${id}">Tell partner</button>`;
       return `<li class="clue-item${clue.level < level ? " clue-old" : ""}">
           <span class="clue-head"><span class="clue-text">${clue.text}</span>${action}</span>
           <span class="clue-detail">${clue.detail}</span>

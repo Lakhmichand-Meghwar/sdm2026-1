@@ -2,7 +2,7 @@
 import { buildInviteLink } from "@sdm/core/client";
 import { timeLoopGame } from "../shared/game.ts";
 import type { GameEvent, TimeLoopState } from "../shared/index.ts";
-import { CODE_DIGITS, type CodeKind, LEVEL_COUNT, levelInfo, ROLE_TEXT } from "../shared/rules.ts";
+import { CODE_DIGITS, type CodeKind, LEVEL_COUNT, levelInfo, ROLE_SOLO, ROLE_TEXT } from "../shared/rules.ts";
 import { TAPS } from "./targets.ts";
 import * as ui from "./ui.ts";
 
@@ -36,7 +36,7 @@ function isCodeKind(value: string): value is CodeKind {
   return value === "laptop" || value === "archive" || value === "vault";
 }
 
-function showEvent(event: GameEvent, me: number): void {
+function showEvent(event: GameEvent, me: number, solo: boolean): void {
   // Private events are for one detective only.
   if (event.by !== 0 && event.by !== me) return;
   if (event.kind === "prompt") {
@@ -45,7 +45,7 @@ function showEvent(event: GameEvent, me: number): void {
     ui.openCodeModal({
       ...CODE_TITLES[event.extra],
       hint: event.text,
-      digits: CODE_DIGITS[event.extra],
+      digits: event.extra === "archive" && solo ? 4 : CODE_DIGITS[event.extra],
     });
   } else if (event.kind === "codeok") {
     ui.setModalStatus(true, event.text);
@@ -71,12 +71,12 @@ function handleEvents(state: TimeLoopState, me: number): void {
     primed = true;
     return;
   }
-  for (const event of fresh) showEvent(event, me);
+  for (const event of fresh) showEvent(event, me, state.solo);
 }
 
-function playerInSlot(state: TimeLoopState, slot: 1 | 2): { id: string; name: string; bot: boolean } | null {
+function playerInSlot(state: TimeLoopState, slot: 1 | 2): { id: string; name: string } | null {
   for (const [id, player] of state.players.entries()) {
-    if (player.slot === slot) return { id, name: player.name, bot: player.bot };
+    if (player.slot === slot) return { id, name: player.name };
   }
   return null;
 }
@@ -87,7 +87,7 @@ function renderCards(state: TimeLoopState, sessionId: string): void {
     const connected = entry ? state.seats.get(entry.id)?.connected !== false : false;
     ui.setPlayerCard(slot, {
       name: entry?.name ?? `Player ${slot}`,
-      status: entry?.bot ? "Bot partner" : entry ? (connected ? "Online" : "Away") : "Waiting to join",
+      status: entry ? (connected ? "Online" : "Away") : "Waiting to join",
       you: entry?.id === sessionId,
       holdsKey: state.keyHolder === slot,
     });
@@ -109,8 +109,9 @@ function renderRoom(state: TimeLoopState, me: number): void {
   ui.setRoomCode(state.code);
   const mine = Array.from(me === 2 ? state.clues2 : state.clues1);
   const theirs = Array.from(me === 2 ? state.clues1 : state.clues2);
-  ui.renderClues(mine, theirs, level);
-  ui.setOwnership(me, TAPS);
+  ui.renderClues(mine, theirs, level, !state.solo);
+  ui.setOwnership(state.solo ? 0 : me, TAPS);
+  ui.setSolo(state.solo);
 
   const keyOnFloor = state.keyVisible && state.keyHolder === 0;
   ui.setKeyVisible(level === 1 && keyOnFloor);
@@ -157,7 +158,8 @@ export function render(state: TimeLoopState, sessionId: string): void {
         config.levels[state.level - 1]?.duration ?? 60,
         penalty,
         state.previous,
-        ROLE_TEXT[state.level]?.[me === 2 ? 2 : 1] ?? "",
+        state.solo ? levelInfo(state.level).soloRule : levelInfo(state.level).rule,
+        state.solo ? ROLE_SOLO : (ROLE_TEXT[state.level]?.[me === 2 ? 2 : 1] ?? ""),
         (state.readyMask & bit) !== 0,
       );
       ui.setOverlay("brief");
@@ -176,7 +178,7 @@ export function render(state: TimeLoopState, sessionId: string): void {
   }
 
   ui.setBanner(
-    phase === "playing" && partnerAway(state, sessionId)
+    phase === "playing" && !state.solo && partnerAway(state, sessionId)
       ? "Your partner is away. The clock is paused until they are back."
       : null,
   );

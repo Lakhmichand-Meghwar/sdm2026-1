@@ -2517,3 +2517,9 @@ button:disabled {
   font-size: 0.56rem;
   color: var(--dim);
 }
+
+/* ── playing alone: no partner card ──────────────────────────────────────── */
+#bottom-hud.solo #player-2-card,
+#bottom-hud.solo .hud-clues + .hud-divider {
+  display: none;
+}

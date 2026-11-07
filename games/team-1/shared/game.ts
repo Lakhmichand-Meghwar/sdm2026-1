@@ -88,23 +88,16 @@ function bitOf(slot: Slot): number {
   return slot === 1 ? 1 : 2;
 }
 
-/** Detectives who can play right now: connected people, plus the bot if there is one. */
+/** Detectives who are connected right now. */
 function activeDetectives(ctx: Ctx): number {
   let n = 0;
-  for (const [id, player] of ctx.state.players.entries()) {
-    if (player.bot || ctx.state.seats.get(id)?.connected) n += 1;
-  }
+  for (const id of ctx.state.players.keys()) if (ctx.state.seats.get(id)?.connected) n += 1;
   return n;
 }
 
-function botPlayer(ctx: Ctx): Player | undefined {
-  for (const player of ctx.state.players.values()) if (player.bot) return player;
-  return undefined;
-}
-
-function botDelay(ctx: Ctx): number {
-  const rate = ctx.config.tickRate;
-  return ctx.rng.int(Math.floor(rate * 1.5), Math.floor(rate * 3));
+/** How many connected detectives the clock needs: one when playing alone, otherwise both. */
+function requiredDetectives(ctx: Ctx): number {
+  return ctx.state.solo ? 1 : 2;
 }
 
 function levelConfig(ctx: Ctx): TimeLoopConfig["levels"][number] {
@@ -141,7 +134,6 @@ function beginLevel(ctx: Ctx, level: number, previous: string): void {
   s.readyMask = 0;
   s.previous = previous;
   s.phase = "briefing";
-  if (botPlayer(ctx)) s.botAt = ctx.tick + botDelay(ctx);
 }
 
 function newGame(ctx: Ctx): void {
@@ -186,8 +178,8 @@ function penalize(ctx: Ctx): number {
 function tickClock(ctx: Ctx): void {
   const s = ctx.state;
   if (s.phase === "playing") {
-    // The clock only runs while both detectives are connected.
-    if (activeDetectives(ctx) < 2) return;
+    // The clock only runs while every detective is connected.
+    if (activeDetectives(ctx) < requiredDetectives(ctx)) return;
     s.subTick += 1;
     if (s.subTick < ctx.config.tickRate) return;
     s.subTick = 0;
@@ -281,7 +273,7 @@ function prompt(ctx: Ctx, slot: Slot, kind: CodeKind, hint: string): void {
 function interact(ctx: Ctx, slot: Slot, target: Target): void {
   const s = ctx.state;
   if (TARGET_LEVEL[target] !== s.level) return;
-  const owner = OWNER[target];
+  const owner = s.solo ? 0 : OWNER[target];
   if (owner !== 0 && owner !== slot) {
     say(ctx, "warn", `${nameOf(ctx, owner)} has to do that. Tell them what you see.`, slot);
     return;
@@ -396,9 +388,11 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
           ctx,
           slot,
           "archive",
-          slot === 1
-            ? "You type the day, two digits. Your partner types the month."
-            : "You type the month, two digits. Your partner types the day.",
+          s.solo
+            ? "Four digits: the month, then the day."
+            : slot === 1
+              ? "You type the day, two digits. Your partner types the month."
+              : "You type the month, two digits. Your partner types the day.",
         );
       }
       return;
@@ -450,7 +444,9 @@ function interact(ctx: Ctx, slot: Slot, target: Target): void {
           "vault",
           hasClue(ctx, slot, "safecode")
             ? "The photo year, reversed."
-            : "Ask your partner what the terminal says.",
+            : s.solo
+              ? "Read the terminal first."
+              : "Ask your partner what the terminal says.",
         );
       }
       return;
@@ -493,7 +489,19 @@ function submitCode(ctx: Ctx, slot: Slot, kind: CodeKind, value: string): void {
     say(ctx, "codeok", "Access granted", slot);
     say(ctx, "success", `${name} unlocks the laptop. The exit door is open.`);
   } else if (kind === "archive") {
-    if (s.archiveDone || (s.archiveMask & bitOf(slot)) !== 0) return;
+    if (s.archiveDone) return;
+    if (s.solo) {
+      if (value !== `${CODES.archive[2]}${CODES.archive[1]}`) {
+        rejectCode(ctx, slot);
+        return;
+      }
+      s.archiveMask = 3;
+      s.archiveDone = true;
+      say(ctx, "codeok", "Access granted", slot);
+      say(ctx, "success", `${name} opens the archive door.`);
+      return;
+    }
+    if ((s.archiveMask & bitOf(slot)) !== 0) return;
     if (value !== CODES.archive[slot]) {
       rejectCode(ctx, slot);
       return;
@@ -526,12 +534,12 @@ function handle(ctx: Ctx, playerId: string, input: TimeLoopInput): void {
 
   switch (input.type) {
     case "share":
-      if (s.phase === "playing") shareClue(ctx, slot, input.clue);
+      if (s.phase === "playing" && !s.solo) shareClue(ctx, slot, input.clue);
       return;
     case "ready":
       if (s.phase !== "briefing") return;
       s.readyMask |= bitOf(slot);
-      if (s.readyMask === 3) s.phase = "playing";
+      if (s.readyMask === (s.solo ? 1 : 3)) s.phase = "playing";
       return;
     case "restart":
       if (s.phase === "won") newGame(ctx);
@@ -543,77 +551,6 @@ function handle(ctx: Ctx, playerId: string, input: TimeLoopInput): void {
       if (s.phase === "playing") interact(ctx, slot, input.target);
       return;
   }
-}
-
-// ── the bot ───────────────────────────────────────────────────────────────────
-
-const BOT_SLOT: Slot = 2;
-const BOT_ID = "bot";
-
-/**
- * The bot plays detective 2. It only acts when its part of the puzzle can be done, and it waits for
- * the human to do theirs (it can see their journal), so the person still has to play. It tells the
- * human what it reads.
- */
-function botPlan(ctx: Ctx): boolean {
-  const s = ctx.state;
-  const mine = (id: ClueId) => hasClue(ctx, BOT_SLOT, id);
-  const theirs = (id: ClueId) => hasClue(ctx, 1, id);
-  const tell = (id: ClueId): boolean => {
-    if (!mine(id) || theirs(id)) return false;
-    shareClue(ctx, BOT_SLOT, id);
-    return true;
-  };
-
-  switch (s.level) {
-    case 1:
-      if (!mine("blue4")) interact(ctx, BOT_SLOT, "note");
-      else if (!tell("blue4")) {
-        if (!s.cabinetOpen && s.keyHolder !== 0) interact(ctx, BOT_SLOT, "cabinet");
-        else if (!s.laptopDone && theirs("year1998")) submitCode(ctx, BOT_SLOT, "laptop", CODES.laptop);
-        else return false;
-      }
-      return true;
-    case 2:
-      if (!mine("day17")) interact(ctx, BOT_SLOT, "calendar");
-      else if (!tell("day17")) {
-        const book = SHELF_ORDER[s.shelfStep];
-        if (!s.keyVisible && theirs("shelforder") && book !== undefined) {
-          interact(ctx, BOT_SLOT, `book${book}` as Target);
-        } else if (!s.archiveCabinetOpen && s.keyHolder !== 0) {
-          interact(ctx, BOT_SLOT, "filing");
-        } else if ((s.archiveMask & 2) === 0 && theirs("month04")) {
-          submitCode(ctx, BOT_SLOT, "archive", CODES.archive[BOT_SLOT]);
-        } else return false;
-      }
-      return true;
-    default:
-      if (!mine("switchpattern")) interact(ctx, BOT_SLOT, "poster");
-      else if (!tell("switchpattern")) {
-        const down = [2, 3].find((i) => (s.switchMask & (1 << i)) === 0);
-        if (!s.powered && down !== undefined) interact(ctx, BOT_SLOT, `sw${down}` as Target);
-        else if (s.powered && !s.safeOpen && theirs("safecode"))
-          submitCode(ctx, BOT_SLOT, "vault", CODES.vault);
-        else return false;
-      }
-      return true;
-  }
-}
-
-function botAct(ctx: Ctx): void {
-  const s = ctx.state;
-  if (!botPlayer(ctx) || ctx.tick < s.botAt) return;
-  if (s.phase === "briefing") {
-    s.readyMask |= bitOf(BOT_SLOT);
-    if (s.readyMask === 3) s.phase = "playing";
-  } else if (s.phase !== "playing") {
-    return;
-  } else if (!botPlan(ctx)) {
-    // Nothing to do yet: look again soon.
-    s.botAt = ctx.tick + ctx.config.tickRate;
-    return;
-  }
-  s.botAt = ctx.tick + botDelay(ctx);
 }
 
 // ── definition ────────────────────────────────────────────────────────────────
@@ -630,31 +567,18 @@ export const timeLoopGame: GameDefinition<TimeLoopState, TimeLoopInput, TimeLoop
 
   join(ctx, playerId, options) {
     const s = ctx.state;
-    const slots = new Set<number>();
-    let bot: Player | undefined;
-    for (const other of s.players.values()) {
-      slots.add(other.slot);
-      if (other.bot) bot = other;
-    }
-    let slot: Slot = slots.has(1) ? 2 : 1;
-    if (bot && s.players.size >= 2) {
-      // A person takes over from the bot and keeps its journal.
-      slot = bot.slot === 2 ? 2 : 1;
-      s.players.delete(BOT_ID);
-    }
+    if (s.players.size === 0 && options.solo === true) s.solo = true;
+    const taken = new Set<number>();
+    for (const other of s.players.values()) taken.add(other.slot);
+    const slot: Slot = taken.has(1) ? 2 : 1;
     const player = new Player();
     player.slot = slot;
     player.name = String(options.name ?? "").trim() || `Player ${slot}`;
     s.players.set(playerId, player);
-
-    if (options.bot === true && slot === 1 && s.players.size === 1) {
-      const helper = new Player();
-      helper.slot = BOT_SLOT;
-      helper.name = "Bot";
-      helper.bot = true;
-      s.players.set(BOT_ID, helper);
-    } else if (bot) {
-      say(ctx, "info", `${player.name} takes over from the bot.`);
+    if (s.solo && slot === 2) {
+      // Somebody joined a room made for one: from now on the two of you have separate jobs.
+      s.solo = false;
+      say(ctx, "info", `${player.name} joins. From now on you each have your own jobs.`);
     }
   },
 
@@ -666,9 +590,8 @@ export const timeLoopGame: GameDefinition<TimeLoopState, TimeLoopInput, TimeLoop
 
   step(ctx, inputs) {
     const s = ctx.state;
-    if (s.phase === "waiting" && s.players.size >= 2) newGame(ctx);
+    if (s.phase === "waiting" && s.players.size >= requiredDetectives(ctx)) newGame(ctx);
     for (const input of inputs) handle(ctx, input.playerId, input.data);
-    botAct(ctx);
     tickClock(ctx);
   },
 

@@ -16,8 +16,6 @@ export const Player = schema(
   {
     name: t.string().default(""),
     slot: t.uint8().default(0),
-    /** A computer-controlled partner. It has no seat and plays through the game rules. */
-    bot: t.boolean().default(false),
   },
   "Player",
 );
@@ -57,8 +55,8 @@ export const TimeLoopState = BaseState.extend(
     readyMask: t.uint8().default(0),
     /** Summary of the room just cleared, shown in the next briefing. */
     previous: t.string().default(""),
-    /** Tick at which the bot acts next. */
-    botAt: t.uint32().default(0),
+    /** One player does everything. Set when the first player asks to play alone. */
+    solo: t.boolean().default(false),
     /** Seconds left when the last door opened. */
     finalTime: t.uint16().default(0),
     /** Each detective's own journal: clue ids in the order found. Kept across loops and rooms. */
@@ -104,8 +102,8 @@ export type TimeLoopInput = z.infer<typeof TimeLoopInputSchema>;
 /** What a client passes when it creates or joins a room. */
 export const TimeLoopJoinOptionsSchema = z.object({
   name: z.string().trim().max(24).default(""),
-  /** Create the room with a bot as the second detective. */
-  bot: z.boolean().default(false),
+  /** Play the whole game alone: one player can use everything. */
+  solo: z.boolean().default(false),
 });
 
 /** Room settings plus tuning values, loaded from config/game.json. */
