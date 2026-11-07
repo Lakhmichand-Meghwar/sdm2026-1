@@ -8,6 +8,7 @@ import {
   type Tool,
   tickMs,
 } from "../shared/escape.ts";
+import { cabinetOpened, playCabinet } from "./cabinet.ts";
 import { playDrawer } from "./drawer.ts";
 import { playFootsteps, unlockAudio, walkers } from "./footsteps.ts";
 import "./style.css";
@@ -206,6 +207,7 @@ function render(state: EscapeSnapshot) {
     setDrawer(false);
   }
   for (const id of walkers(snapshot?.patients, state.patients)) playFootsteps(id === room?.sessionId);
+  if (cabinetOpened(snapshot, state)) playCabinet();
   snapshot = state;
   const encounter = state.ghostSeconds !== null;
   const active = state.phase === "running";
