@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { generateRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from "../server/roomCodes.ts";
-import { buildInviteLink, normalizeRoomCode, readClientParams } from "./urlParams.ts";
+import { buildInviteLink, normalizeRoomCode, readClientParams, serverUrlFromPage } from "./urlParams.ts";
 
 describe("normalizeRoomCode", () => {
   it("uppercases and trims a valid code", () => {
@@ -82,5 +82,41 @@ describe("buildInviteLink", () => {
     expect(buildInviteLink("https://game.example/play?room=AAAA&name=Ada#top", "QXTR")).toBe(
       "https://game.example/play?room=QXTR",
     );
+  });
+});
+
+describe("serverUrlFromPage", () => {
+  it("is the origin for a page at the root", () => {
+    expect(serverUrlFromPage("https://game.example/")).toBe("https://game.example");
+    expect(serverUrlFromPage("https://game.example/index.html")).toBe("https://game.example");
+    expect(serverUrlFromPage("http://localhost:2567/")).toBe("http://localhost:2567");
+  });
+
+  it("keeps the path a game is served under, without a trailing slash", () => {
+    expect(serverUrlFromPage("https://game.example/team-2/")).toBe("https://game.example/team-2");
+    expect(serverUrlFromPage("https://game.example/team-2/index.html")).toBe("https://game.example/team-2");
+  });
+
+  it("ignores the query string and the hash", () => {
+    expect(serverUrlFromPage("https://game.example/team-2/?room=QXTR#top")).toBe(
+      "https://game.example/team-2",
+    );
+    expect(serverUrlFromPage("https://game.example/?room=QXTR")).toBe("https://game.example");
+  });
+
+  it("climbs out of folders for a page below the server root", () => {
+    expect(serverUrlFromPage("https://game.example/team-4/multiplayer/", 1)).toBe(
+      "https://game.example/team-4",
+    );
+    expect(serverUrlFromPage("https://game.example/multiplayer/index.html", 1)).toBe("https://game.example");
+  });
+
+  it("never climbs above the origin", () => {
+    expect(serverUrlFromPage("https://game.example/", 3)).toBe("https://game.example");
+  });
+
+  it("agrees with buildInviteLink about which page it is on", () => {
+    const page = "https://game.example/team-2/?room=ABCD";
+    expect(buildInviteLink(page, "QXTR")).toBe(`${serverUrlFromPage(page)}/?room=QXTR`);
   });
 });

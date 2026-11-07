@@ -15,6 +15,7 @@ import { performance } from "node:perf_hooks";
 import {
   GameCodeError,
   generateRoomCode,
+  guestFingerprint,
   RoomStats,
   type RoomStatsSnapshot,
   Simulation,
@@ -23,6 +24,7 @@ import {
   type AppEnv,
   ClientMessage,
   DebugCommandSchema,
+  GUEST_ID_OPTION,
   isDebugEnabled,
   type Notice,
   newSeed,
@@ -122,6 +124,8 @@ export function createGameRoom<S extends BaseState, I, C extends RoomSettings>(
     failed = false;
 
     override async onCreate(options: { private?: boolean } = {}): Promise<void> {
+      // The creator's join options arrive here too, raw `guestId` included: read only `private`, and
+      // never log or store `options` as a whole.
       // The code is part of the state (and the replay), so pick it before the simulation starts.
       if (options.private) this.code = generateRoomCode((code) => deps.registry.byCode(code) !== undefined);
       this.log = deps.logger.child({ roomId: this.roomId, code: this.code });
@@ -166,18 +170,24 @@ export function createGameRoom<S extends BaseState, I, C extends RoomSettings>(
     }
 
     override onJoin(client: Client, options: unknown): void {
+      // Only the fingerprint goes further, scoped to this game (def.id) so it can't link one player
+      // across the games that share the origin. Never log `options`: it still holds the raw guest ID.
+      const guest = guestFingerprint(
+        def.id,
+        (options as Record<string, unknown> | undefined)?.[GUEST_ID_OPTION],
+      );
       try {
-        this.sim.join(client.sessionId, options);
+        this.sim.join(client.sessionId, options, guest);
       } catch (err) {
         if (err instanceof GameCodeError) {
           this.#fail(err);
           throw new Error("can't join: the room hit an error and closed");
         }
-        this.log.info({ playerId: client.sessionId, reason: errorMessage(err) }, "join rejected");
+        this.log.info({ playerId: client.sessionId, guest, reason: errorMessage(err) }, "join rejected");
         throw new Error(`can't join: ${errorMessage(err)}`);
       }
       this.peakPlayers = Math.max(this.peakPlayers, this.clients.length);
-      this.log.info({ playerId: client.sessionId, tick: this.state.tick }, "player joined");
+      this.log.info({ playerId: client.sessionId, guest, tick: this.state.tick }, "player joined");
     }
 
     override async onDrop(client: Client): Promise<void> {

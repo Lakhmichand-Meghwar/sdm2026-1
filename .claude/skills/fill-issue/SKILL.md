@@ -20,6 +20,10 @@ pnpm workflow:classify --kind issue --json
 - **Exit code 1 means it could not decide** (`undecided: true`, with `candidates`). Ask the user which type it is, then re-run with `--type <their answer>`. Do not guess.
 - If it reports several owners for the changed files, tell the user the change must be split (one issue, one team label), or pass `--label` if the user names the owner.
 
+## The team-instructor label
+
+`team-instructor` is reserved for the instructors (`.github/instructors.json`). The classifier refuses it, with an explanation, when the GitHub account is not on that list. **Do not work around it**: never pass `--actor`, never edit the list, never write the label by hand. Stop, tell the user which label you would use instead (their team's, or `platform`; for changes under `course/` from another team, also a line `Cross-team: <why>` in the issue) and continue with that.
+
 ## 2. Fill the template
 
 Read the file named in `template`. Write the issue body to a scratch file (not into the repo) that keeps **every `##` heading, in order, with the exact same text**. Remove the HTML comments.

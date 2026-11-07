@@ -6,6 +6,7 @@ import {
   buildIssueUrl,
   createLogBuffer,
   sendBugReport,
+  serverLink,
 } from "./bugReport.ts";
 
 const CONTEXT: BugReportContext = {
@@ -118,11 +119,41 @@ describe("sendBugReport", () => {
     expect(created.url).toBe("http://localhost:2567/api/bug-reports/0b6c6a4e-3c3b-4f0b-9a55-6f6a2b1c9d10");
   });
 
+  it("keeps the path the game is served under, so the links work behind the gateway", async () => {
+    const urls: string[] = [];
+    const created = await sendBugReport("https://game.example/team-2", report, async (url) => {
+      urls.push(String(url));
+      return new Response(
+        JSON.stringify({
+          id: "0b6c6a4e-3c3b-4f0b-9a55-6f6a2b1c9d10",
+          url: "/api/bug-reports/0b6c6a4e-3c3b-4f0b-9a55-6f6a2b1c9d10",
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      );
+    });
+    expect(urls).toEqual(["https://game.example/team-2/api/bug-reports"]);
+    expect(created.url).toBe(
+      "https://game.example/team-2/api/bug-reports/0b6c6a4e-3c3b-4f0b-9a55-6f6a2b1c9d10",
+    );
+  });
+
   it("explains rejected reports", async () => {
     await expect(sendBugReport("http://x", report, reply(413, {}))).rejects.toThrow(/too large/);
     await expect(sendBugReport("http://x", report, reply(429, {}))).rejects.toThrow(/a minute/);
     await expect(
       sendBugReport("http://x", report, reply(400, { error: "invalid bug report" })),
     ).rejects.toThrow(/invalid bug report/);
+  });
+});
+
+describe("serverLink", () => {
+  it("adds the path below the server's own path instead of replacing it", () => {
+    expect(serverLink("https://game.example/team-2", "/api/replays/r1")).toBe(
+      "https://game.example/team-2/api/replays/r1",
+    );
+    expect(serverLink("https://game.example", "/api/replays/r1")).toBe("https://game.example/api/replays/r1");
+    expect(serverLink("http://localhost:2567/", "/api/replays/r1")).toBe(
+      "http://localhost:2567/api/replays/r1",
+    );
   });
 });

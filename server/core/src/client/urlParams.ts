@@ -47,6 +47,20 @@ export function buildInviteLink(currentHref: string, code: string): string {
   return url.toString();
 }
 
+/**
+ * The server address for a page served by the game server itself, so the same build works at the root
+ * of a domain and behind the gateway at `<address>/team-N/`. It is the page's folder without a trailing
+ * slash: `https://host/team-2/` gives `https://host/team-2`, `https://host/` gives `https://host`.
+ * `levelsUp` climbs out of folders when the page sits below the server root (`multiplayer/index.html`).
+ * Never use `location.origin` for this: it drops the `/team-N` prefix.
+ */
+export function serverUrlFromPage(pageHref: string, levelsUp = 0): string {
+  const url = new URL(pageHref);
+  const folders = url.pathname.slice(0, url.pathname.lastIndexOf("/")).split("/").filter(Boolean);
+  const kept = folders.slice(0, Math.max(0, folders.length - levelsUp));
+  return `${url.origin}${kept.map((folder) => `/${folder}`).join("")}`;
+}
+
 function nonEmpty(value: string | null): string | null {
   const trimmed = value?.trim() ?? "";
   return trimmed === "" ? null : trimmed;

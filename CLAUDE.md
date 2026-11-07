@@ -17,6 +17,12 @@ These rules apply to every agent (and every human) working in this repository. T
 
 Work inside your own team's folder. Changes to another team's folder or to the shared folders need an issue that says why, on a line of its own (`Cross-team: <why>`), and a review from someone on the owning team.
 
+**`team-instructor` is reserved for the instructors.** Only the GitHub accounts in [`.github/instructors.json`](.github/instructors.json) may use it: the label, a title that starts with `[team-instructor]` or is written `type(team-instructor): ...`, and `team-instructor` under *Team* in a PR. Everybody else, AI agents included, uses their own team label. To change files under `course/` from another team, use your team's label (or `platform`) and add a line `Cross-team: <why>` to the issue. The account is what is checked, not who typed: an instructor's AI-assisted work is fine.
+
+- The `instructor gate` check runs on every pull request (it blocks the merge once the rulesets require it) and comments on issues. `pnpm check:instructor --kind pr|issue --number <n>` runs it by hand.
+- `pnpm workflow:classify` refuses the `team-instructor` label to any other account. Agents never work around it (for example with `--actor`): they stop and ask which label to use.
+- The instructors review everything under `course/` and any change to the list (`.github/CODEOWNERS`; binding once an admin imports the `main` ruleset).
+
 ## Tech stack
 
 Everyone uses the same stack. Don't introduce alternatives without an issue that explains why.
@@ -42,7 +48,10 @@ team-N/<issue>-<description>  →  feature/team-N  →  main  →  prod
 1. **Work branch → `feature/team-N`.** One pull request per issue, reviewed by a teammate. Everything your team is building lands here first, so one team's unfinished work never breaks another team.
 2. **`feature/team-N` → `main`.** Only when CI is green for the feature branch. The CI/CD checks are owned by P1 and described in [server/ARCHITECTURE.md](server/ARCHITECTURE.md) as they are added.
 3. **`main` → `prod`.** A release pull request, opened when `main` works and is ready to go live.
-4. **Stay current.** After your feature branch has been merged into `main`, merge `main` back into `feature/team-N` before starting the next piece of work.
+4. **Stay current.** `feature/team-N` must not fall behind `main`, or your team misses platform fixes, git hooks and commands. You don't have to remember this: after every merge into `main` (and every hour) the "Branches sync" workflow opens a **sync PR** from `main` into each `feature/team-N` that is behind it, labelled `platform` and referring to the standing sync issue. It only opens a PR when none is open; an open sync PR picks up new commits on `main` by itself.
+   - **Your team reviews and merges its sync PR**, like any other PR into your feature branch, preferably before starting the next piece of work. Nobody else merges it for you.
+   - **If it conflicts**, the PR's summary lists the files. GitHub can't resolve them on the PR itself (that would commit to `main`), so resolve them on your side, like `pnpm sync` does for a work branch: open a team issue with the line `Cross-team: brings main into feature/team-N` (the merge touches other owners' files), branch `team-N/<issue>-…` from `origin/feature/team-N`, run `git merge origin/main`, fix the conflicts, commit, and open that branch as a PR into `feature/team-N`. Once it is merged, GitHub marks the sync PR as merged too; if `main` moved on in the meantime, the sync PR stays open with only the newer commits. Or ask platform for help in the sync PR.
+   - The workflow needs a `SYNC_TOKEN` secret (see [server/CLAUDE.md](server/CLAUDE.md#branch-release-and-environment-commands)). Until a repository admin adds it, CI doesn't start on a new sync PR until the next merge into `main` updates it.
 
 Platform work (`server/`, CI, Railway) and instructor work (`course/`, workflow files) don't belong to a game team, so their branches (`platform/<issue>-…`, `team-instructor/<issue>-…`) open pull requests straight into `main`.
 
@@ -54,19 +63,21 @@ Railway is where the game is hosted. **Nothing is deployed until the go-live che
 
 `main` is the development branch (there is no separate `dev` branch): everything merged into `main` is deployed to the development environment. **Nothing on `main` reaches production by itself.** Production changes only when a release PR is merged into `prod`, and the [blocks](#blocks) below make sure of it. Railway belongs to the platform team: teams don't create or change Railway services, variables or domains. Open a `platform` issue instead.
 
+**One address, every team.** Production serves each released game at the same time, each under its own path (`<address>/team-N`); a team not released yet is listed on the index as "not released yet". A gateway (`server/gateway/`, see [server/ARCHITECTURE.md](server/ARCHITECTURE.md)) is the only service with a public domain; every game is its own service on Railway's private network. Each service follows the environment's branch, so adding or updating a team's game is the normal path (`feature/team-N` into `main`, then a release PR into `prod`), and a merged game redeploys only its own service. Games must work under a path: see [server/docs/CLIENT_GUIDE.md](server/docs/CLIENT_GUIDE.md).
+
 ### Rules
 
-1. **Deploy only through the pipeline.** What runs on Railway is what was merged: `main` deploys to the development environment and `prod` to production (see [Branches](#branches)). Nobody deploys from a laptop (`railway up`), from a work branch, or by editing a service in the Railway dashboard. No workflow, bot or script may push or merge into `prod`, auto-merge stays off, and Railway's production environment follows the `prod` branch, never `main`.
+1. **Deploy only through the pipeline.** What runs on Railway is what was merged: `main` deploys to the development environment and `prod` to production (see [Branches](#branches)). **Only those two branches deploy**: no `feature/team-N` or other team branch is ever deployed. Nobody deploys from a laptop (`railway up`), from a work branch, or by editing a service in the Railway dashboard. No workflow, bot or script may push or merge into `prod`, auto-merge stays off, and Railway's production environment follows the `prod` branch, never `main`.
 2. **Gate before `main`.** A change reaches `main` only when CI and the Workflow checks are green and someone other than the author approved the PR. Railway services use Wait for CI (`checkSuites` in `.railway/railway.ts`), so a commit with a red check is never deployed.
 3. **Gate before `prod`.** A release PR (`main` into `prod`) goes ahead only when all of this is true:
    - CI is green on `main`.
    - The commit already ran in the development environment, and its `/health` reports that commit's SHA with `ok: true`.
    - The PR's *Rollback* section names the commit to go back to.
-   - Someone other than the author approved the PR, and the `production` GitHub Environment approved the deploy.
+   - Someone other than the author approved the PR (the `prod` ruleset requires it).
 
-   The `release gate` check verifies the first three automatically on every PR into `prod`.
-4. **Infrastructure is code.** Services, domains, variables and replicas are defined in `.railway/railway.ts` and changed through a reviewed PR that includes the `railway config plan` output. Don't use `railway.json` or `railway.toml`: Railway deprecated them and stops reading them on 2026-12-01. Anything missing from the file is deleted on apply, so every new service must be added there.
-5. **Secrets stay out of the repository.** Keys, tokens and passwords live in Railway variables (sealed, for secrets) or GitHub Actions secrets. Never commit them, paste them into an issue, PR or chat, or print them in logs. Only `.env.example` (names, no values) is committed.
+   The `release gate` check verifies the CI and Rollback bullets automatically on every PR into `prod`, and that it is a release from `main`. Whoever approves the release checks the development bullet by hand (see [server/docs/RAILWAY_SETUP.md](server/docs/RAILWAY_SETUP.md#checking-a-release-by-hand)).
+4. **Infrastructure is code.** Services, domains, variables and replicas are defined in `.railway/railway.ts` and changed through a reviewed PR that includes the `railway config plan` output. Don't use `railway.json` or `railway.toml`: Railway deprecated them and stops reading them on 2026-12-01. Anything missing from the file is deleted on apply, so every new service must be added there. A team's game is added to the `GAMES` list, which also adds it to the gateway.
+5. **Secrets stay out of the repository.** Keys, tokens and passwords live in Railway variables (sealed, for secrets). No workflow deploys, so nothing is kept in GitHub Actions secrets. Never commit them, paste them into an issue, PR or chat, or print them in logs. Only `.env.example` (names, no values) is committed.
 6. **Environments are separate.** Development and production use different variables, databases and domains. Never point development at production data, or the reverse. `APP_ENV` says where the code runs, and `/health` returns it together with the deployed SHA.
 7. **Every service has a `/health` endpoint.** It is Railway's health check. A deploy that is not healthy is not fixed by restarting it by hand: investigate, or roll back. Keep the endpoint fast and free of dependencies.
 8. **Keep it small.** One replica per service. No new service, database or paid add-on without an issue that says why and who pays for it.
@@ -82,27 +93,27 @@ These are what stop `main` from going to production on its own. Two of them ship
 | `prod` ruleset | Direct pushes, force pushes and deletion of `prod`; merging without an approving review or while a check is red; squash and rebase merges | `.github/rulesets/prod.json` | Needs an admin to import it (see the README in that folder) |
 | `main` ruleset | Direct pushes and force pushes to `main`; merging without a review or with red CI | `.github/rulesets/main.json` | Needs an admin to import it |
 | Auto-merge off | A release PR merging itself | Repository setting | Off today; an admin keeps it off |
-| Railway source branches | Production deploying `main` | `.railway/railway.ts` | Set up with #9 |
-| Wait for CI | A commit with a red check being deployed | `checkSuites` in `.railway/railway.ts` | Set up with #9 |
-| `production` environment | A production deploy without a human approval | GitHub Environment | Needs an admin |
+| Railway source branches | Production deploying `main` | `.railway/railway.ts` | In `.railway/railway.ts`; applied by a Railway owner (#161) |
+| Wait for CI | A commit with a red check being deployed | `checkSuites` in `.railway/railway.ts` | In `.railway/railway.ts`; applied by a Railway owner (#161) |
+| Railway deployment approval | A production deploy started by a GitHub account that is not linked to a Railway project member | Railway holds the deploy until a project member clicks Approve. It is a safety net, not a gate: a linked member deploys without it. Keep the project's members few | Needs a Railway project owner |
 
 Until the rulesets are imported, nothing technical stops a push to `prod` or a merge of a red PR. Follow the rules as if it did.
 
 ### Go-live checklist
 
-All of these are done before the first deploy. Items marked *(admin)* need the repository owner.
+All of these are done before the first deploy. Items marked *(admin)* need the repository owner. The steps are in [server/docs/RAILWAY_SETUP.md](server/docs/RAILWAY_SETUP.md) and tracked in #161.
 
 - [ ] CI and the Workflow checks pass on `main`.
 - [ ] `release-gate.yml` is on `main`, and the `prod` and `main` rulesets from `.github/rulesets/` are imported, in that order *(admin)*.
 - [ ] Auto-merge is off *(admin)*.
-- [ ] The Railway project is defined in `.railway/railway.ts`, production follows `prod` and development follows `main`, and the `railway config plan` output was reviewed (#9).
+- [ ] The Railway project is defined in `.railway/railway.ts`, production follows `prod` and development follows `main`, and the `railway config plan` output was reviewed (#161).
 - [ ] Wait for CI is on for every service.
-- [ ] The `production` GitHub Environment exists with a required reviewer *(admin)*.
-- [ ] The Railway GitHub app is installed on the repository, and the Railway tokens are stored as GitHub Actions secrets *(admin)*.
+- [ ] The Railway GitHub app is installed on the repository *(admin)*. No Railway token is needed in GitHub, because no workflow deploys.
+- [ ] The Railway project's members are set: the platform team as Editors, everyone else Viewers, Owner only for the administrators *(Railway project owner)*.
 - [ ] Variables are set in Railway, nothing secret is in the repository, and development and production use different values.
 - [ ] `/health` returns `env` and `sha` in every environment.
 - [ ] A rollback was rehearsed once in the development environment.
-- [ ] `server/ARCHITECTURE.md` describes the setup and how to promote a release (#9).
+- [ ] `server/docs/RAILWAY_SETUP.md` has the public address of every service, and a release was checked by hand once, as it describes.
 
 ## Workflow
 
@@ -176,7 +187,7 @@ The repo has only two kinds of labels; there are no type, size or priority label
 | `team-1` … `team-4`, `platform`, `team-instructor` | exactly one on every issue and PR | you |
 | `stackpile`, `waiting-on.author`, `waiting-on.review`, `waiting-on.merge` | on open PRs only | the labeller |
 
-The **labeller** (`pnpm labels:prs`, the "PR labels" workflow) runs every 10 minutes and whenever a PR or review changes. It only touches these four labels, and removes them when a PR is closed or merged:
+The **labeller** (`pnpm labels:prs`, the "PR labels" workflow) relabels every PR whenever any PR or review changes, and every 10 minutes as a fallback. It only touches these four labels, and removes them when a PR is closed or merged:
 
 - `stackpile`: the PR is stacked on another PR (its base isn't `main`, `prod` or a `feature/team-N` branch). It merges after the PR below it.
 - Exactly one waiting label, checked in this order:

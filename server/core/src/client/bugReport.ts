@@ -183,13 +183,21 @@ export interface SavedBugReport {
 const HTTP_TOO_LARGE = 413;
 const HTTP_TOO_MANY = 429;
 
+/**
+ * `path` below the game server's address. Never `new URL(path, serverUrl)`: a path that starts with `/`
+ * replaces the base's own path, which drops the prefix a game is served under (`/team-2` behind the gateway).
+ */
+export function serverLink(serverUrl: string, path: string): string {
+  return `${serverUrl.replace(/\/+$/, "")}${path}`;
+}
+
 /** Posts the report to the game server. Throws an Error with a message players can read. */
 export async function sendBugReport(
   serverUrl: string,
   report: BugReport,
   fetchFn: typeof fetch = fetch,
 ): Promise<SavedBugReport> {
-  const res = await fetchFn(`${serverUrl}${Routes.bugReports}`, {
+  const res = await fetchFn(serverLink(serverUrl, Routes.bugReports), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(report),
@@ -202,7 +210,7 @@ export async function sendBugReport(
     throw new Error(`Bug report failed: ${typeof error === "string" ? error : `HTTP ${res.status}`}`);
   }
   const created = BugReportCreatedSchema.parse(body);
-  return { id: created.id, url: new URL(created.url, serverUrl).toString() };
+  return { id: created.id, url: serverLink(serverUrl, created.url) };
 }
 
 export interface BugReporterOptions {
@@ -282,7 +290,7 @@ export function createBugReporter(options: BugReporterOptions): BugReporter {
       report: bugReport,
       roomCode: context.roomCode,
       reportUrl: saved.url,
-      replayUrl: context.roomId ? new URL(Routes.replay(context.roomId), options.serverUrl).toString() : null,
+      replayUrl: context.roomId ? serverLink(options.serverUrl, Routes.replay(context.roomId)) : null,
     });
     show("Bug report saved.", [
       ["Open report", saved.url],

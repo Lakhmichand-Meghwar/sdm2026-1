@@ -26,16 +26,16 @@ Every issue and pull request carries exactly one team label:
 
 ## Project boards
 
-Every team has its own GitHub Project with the issues and pull requests that carry its label. Issues and PRs are added to the boards by their team label, so label your work correctly.
+Every team has its own GitHub Project with the issues and pull requests that carry its label. The boards are also listed on the repository's **Projects** tab. Issues and PRs are added to the boards by their team label, so label your work correctly.
 
 | Board | Contents |
 |---|---|
-| [team-1](https://github.com/users/ferenc-munde/projects/3) | issues and PRs labeled `team-1` |
-| [team-2](https://github.com/users/ferenc-munde/projects/4) | issues and PRs labeled `team-2` |
-| [team-3](https://github.com/users/ferenc-munde/projects/5) | issues and PRs labeled `team-3` |
-| [team-4](https://github.com/users/ferenc-munde/projects/6) | issues and PRs labeled `team-4` |
-| [platform](https://github.com/users/ferenc-munde/projects/7) | issues and PRs labeled `platform` |
-| [All teams](https://github.com/users/ferenc-munde/projects/8) | every issue and PR; filter by team with `label:team-2` etc. |
+| [team-1](https://github.com/users/nd2003/projects/2) | issues and PRs labeled `team-1` |
+| [team-2](https://github.com/users/nd2003/projects/3) | issues and PRs labeled `team-2` |
+| [team-3](https://github.com/users/nd2003/projects/4) | issues and PRs labeled `team-3` |
+| [team-4](https://github.com/users/nd2003/projects/5) | issues and PRs labeled `team-4` |
+| [platform](https://github.com/users/nd2003/projects/6) | issues and PRs labeled `platform` |
+| [All teams](https://github.com/users/nd2003/projects/7) | every issue and PR; filter by team with `label:team-2` etc. |
 
 ## Tracking progress
 
@@ -112,7 +112,7 @@ The report accepts that item, and also the automatic check behind it (here `Refs
 
 **During the hackathon:** run `node course/tooling/pr-report.mjs --state open --failing` now and then, and fix what it lists (edit the PR description, add the label, retarget the base branch). Commits that are already pushed don't have to be rewritten; reference the issue in the next ones.
 
-**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. Only current problems count; legacy problems (see *Rule eras* above) are for information. The report still attributes old PRs to their team through the old `[team-N]` prefix.
+**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. Only current problems count; legacy problems (see *Rule eras* above) are for information. The report still attributes old PRs to their team through the old `[team-N]` prefix. Only the report makes this exception: `pnpm check:pr` and CI always ask for the current rules (for example the commit-format title), so a PR that is still open needs them before it merges.
 
 #### Fixing PRs automatically
 

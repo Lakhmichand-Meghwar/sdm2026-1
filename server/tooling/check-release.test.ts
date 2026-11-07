@@ -32,8 +32,17 @@ describe("checkRelease", () => {
         rules
           .find((r) => r.type === "required_status_checks")
           ?.parameters?.required_status_checks?.map((c) => c.context) ?? [];
-      expect(contexts.filter((c) => c !== "release gate")).toEqual(REQUIRED_CHECKS);
+      // Besides the CI jobs, the rulesets require the two gates that have their own workflows.
+      expect(contexts.filter((c) => c !== "release gate" && c !== "instructor gate")).toEqual(
+        REQUIRED_CHECKS,
+      );
+      // The release gate only runs on PRs into prod, so only the prod ruleset can require it.
+      expect(contexts.includes("release gate")).toBe(ruleset.endsWith("prod.json"));
+      expect(contexts).toContain("instructor gate");
     }
+    // A required check only works if a workflow job really has that name.
+    expect(read(".github/workflows/release-gate.yml")).toMatch(/^ {4}name: release gate$/m);
+    expect(read(".github/workflows/instructor-gate.yml")).toMatch(/^ {4}name: instructor gate$/m);
   });
 
   it("requires every CI job from ci.yml", () => {
