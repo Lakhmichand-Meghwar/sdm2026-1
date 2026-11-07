@@ -1,0 +1,15 @@
+{
+  "version": "1",
+  "tickRate": 10,
+  "patchRate": 20,
+  "maxPlayers": 2,
+  "reconnectSeconds": 60,
+  "levels": [
+    { "duration": 90, "penalty": 0 },
+    { "duration": 80, "penalty": 5 },
+    { "duration": 70, "penalty": 5 }
+  ],
+  "resetSeconds": 3,
+  "loopTimes": [60, 90, 120],
+  "defaultLoopTime": 90
+}

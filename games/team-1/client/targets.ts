@@ -1,0 +1,30 @@
+import type { Target } from "../shared/rules.ts";
+
+/** Element id of each clickable thing in the rooms, and the action it sends. The server decides what happens. */
+export const TAPS: Record<string, Target> = {
+  "obj-note": "note",
+  "obj-painting": "painting",
+  "obj-key": "key",
+  "obj-cabinet": "cabinet",
+  "obj-photo": "photo",
+  "obj-laptop": "laptop",
+  "obj-door": "door1",
+  "obj-card": "card",
+  "obj-calendar": "calendar",
+  "obj-book-0": "book0",
+  "obj-book-1": "book1",
+  "obj-book-2": "book2",
+  "obj-book-3": "book3",
+  "obj-key2": "key2",
+  "obj-filing": "filing",
+  "obj-folder": "folder",
+  "obj-door2": "door2",
+  "obj-poster": "poster",
+  "obj-sw-0": "sw0",
+  "obj-sw-1": "sw1",
+  "obj-sw-2": "sw2",
+  "obj-sw-3": "sw3",
+  "obj-terminal": "terminal",
+  "obj-safe": "safe",
+  "obj-door3": "door3",
+};

@@ -47,6 +47,8 @@
     "env:wait": "node server/tooling/workflow/env-wait.mjs",
     "qa:bots": "node scripts/qa/bots.mjs",
     "qa:multi": "node scripts/qa/multi.mjs",
+    "qa:shot": "node scripts/qa/shot.mjs",
+    "qa:evidence": "node scripts/qa/evidence.mjs",
     "qa:load": "pnpm dlx @colyseus/loadtest@0.18.4 scripts/qa/load.ts --endpoint ws://localhost:2567 --room sample_room --numClients 50",
     "test:e2e": "playwright test",
     "check:instructor": "node server/tooling/workflow/check-instructor.mjs"
