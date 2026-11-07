@@ -57,6 +57,8 @@ export const TimeLoopState = BaseState.extend(
     previous: t.string().default(""),
     /** One player does everything. Set when the first player asks to play alone. */
     solo: t.boolean().default(false),
+    /** The room was made with Play alone, so it goes back to one player if the joiner leaves. */
+    startedSolo: t.boolean().default(false),
     /** Seconds left when the last door opened. */
     finalTime: t.uint16().default(0),
     /** Each detective's own journal: clue ids in the order found. Kept across loops and rooms. */

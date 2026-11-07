@@ -553,6 +553,24 @@ function handle(ctx: Ctx, playerId: string, input: TimeLoopInput): void {
   }
 }
 
+/**
+ * Somebody who joined a Play alone room has gone for good. The player who is left plays alone again:
+ * they become detective 1 and keep what both journals knew, so nothing is lost.
+ */
+function backToSolo(ctx: Ctx): void {
+  const s = ctx.state;
+  const remaining = [...s.players.values()][0];
+  if (!remaining) return;
+  const wasReady = (s.readyMask & bitOf(remaining.slot === 2 ? 2 : 1)) !== 0;
+  remaining.slot = 1;
+  for (const id of s.clues2) if (!hasClue(ctx, 1, id as ClueId)) s.clues1.push(id);
+  s.clues2.clear();
+  if (s.keyHolder !== 0) s.keyHolder = 1;
+  s.readyMask = wasReady ? 1 : 0;
+  s.solo = true;
+  if (s.phase === "briefing" && wasReady) s.phase = "playing";
+}
+
 // ── definition ────────────────────────────────────────────────────────────────
 
 export const timeLoopGame: GameDefinition<TimeLoopState, TimeLoopInput, TimeLoopConfig> = {
@@ -567,7 +585,10 @@ export const timeLoopGame: GameDefinition<TimeLoopState, TimeLoopInput, TimeLoop
 
   join(ctx, playerId, options) {
     const s = ctx.state;
-    if (s.players.size === 0 && options.solo === true) s.solo = true;
+    if (s.players.size === 0) {
+      s.solo = options.solo === true;
+      s.startedSolo = s.solo;
+    }
     const taken = new Set<number>();
     for (const other of s.players.values()) taken.add(other.slot);
     const slot: Slot = taken.has(1) ? 2 : 1;
@@ -583,9 +604,11 @@ export const timeLoopGame: GameDefinition<TimeLoopState, TimeLoopInput, TimeLoop
   },
 
   leave(ctx, playerId) {
-    const player = ctx.state.players.get(playerId);
-    if (player) ctx.state.readyMask &= ~bitOf(player.slot === 2 ? 2 : 1);
-    ctx.state.players.delete(playerId);
+    const s = ctx.state;
+    const player = s.players.get(playerId);
+    if (player) s.readyMask &= ~bitOf(player.slot === 2 ? 2 : 1);
+    s.players.delete(playerId);
+    if (s.startedSolo && !s.solo && s.players.size === 1) backToSolo(ctx);
   },
 
   step(ctx, inputs) {
