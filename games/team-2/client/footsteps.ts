@@ -26,7 +26,12 @@ export function unlockAudio() {
   if (context.state === "suspended") void context.resume();
 }
 
-function noiseBuffer(audio: AudioContext, seconds: number) {
+/** The shared audio context, once a user gesture has created it. */
+export function audio() {
+  return context;
+}
+
+export function noiseBuffer(audio: AudioContext, seconds: number) {
   const buffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * seconds), audio.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
