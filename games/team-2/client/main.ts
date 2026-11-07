@@ -11,6 +11,7 @@ import {
 import { cabinetOpened, playCabinet } from "./cabinet.ts";
 import { playDrawer } from "./drawer.ts";
 import { playFootsteps, unlockAudio, walkers } from "./footsteps.ts";
+import { knifeTaken, playKnife } from "./knife.ts";
 import "./style.css";
 
 const endpoint =
@@ -208,6 +209,7 @@ function render(state: EscapeSnapshot) {
   }
   for (const id of walkers(snapshot?.patients, state.patients)) playFootsteps(id === room?.sessionId);
   if (cabinetOpened(snapshot, state)) playCabinet();
+  if (knifeTaken(snapshot, state)) playKnife();
   snapshot = state;
   const encounter = state.ghostSeconds !== null;
   const active = state.phase === "running";
