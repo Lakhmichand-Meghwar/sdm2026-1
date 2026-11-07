@@ -3,7 +3,7 @@
 //
 //   pnpm check:pr --number 45                      reads the PR with the GitHub CLI
 //   pnpm check:pr --event "$GITHUB_EVENT_PATH"     reads a pull_request event (used by CI)
-//   pnpm check:pr --title "[platform] X" --body-file body.md --head platform/1-x --base main [--labels platform]
+//   pnpm check:pr --title "feat(platform): add x" --body-file body.md --head platform/1-x --base main [--labels platform]
 //
 //   --git-base <ref> [--git-head <ref>]   also classify the changed files; a different type than the
 //                                         template used is reported as a warning

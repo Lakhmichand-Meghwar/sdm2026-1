@@ -60,13 +60,16 @@ Logs are pino JSON (`message` key, level names) so Railway's log explorer can fi
 
 Each game adds its own contract in `games/team-N/shared/`: Colyseus state schema, input schema and config schema (see `server/template/shared/index.ts`).
 
-## Environments
+## Environments (Railway)
 
-| Environment | Deploys | Where |
+Defined in [`.railway/railway.ts`](../.railway/railway.ts): one project `sdm2026-1`, one service per game, one replica each in `europe-west4`.
+
+| Environment | Deploys | `APP_ENV` |
 |---|---|---|
-| PR | Every push to an open PR that touches the game or the platform | Railway PR environment |
-| development | Every merge to `main` that touches the game or the platform | Railway |
-| staging | A chosen commit, via the Promote workflow | Railway |
-| production | A chosen commit from staging, via the Promote workflow, with approval | Railway |
+| development | `main`, after CI passed on the commit (Wait for CI) | `development` |
+| production | `prod`, after CI passed on the commit, via a release PR from `main` | `production` |
 
-Each team has its own Railway project. Watch paths (`games/team-N/**`, `server/**`, `pnpm-lock.yaml`) keep other teams' merges from redeploying your game.
+- Watch paths: a service redeploys only when its game folder or the platform it runs on changes; Markdown and test files never redeploy.
+- Build `pnpm --filter <game> build`, start `node --import tsx <game>/server.ts`, health check `/health`, 15 s draining after SIGTERM, never sleeps.
+- Change the file in a platform PR with the `railway config plan` output for both environments, then apply from an up-to-date `main`: `railway link`, then `railway config plan` and `railway config apply`. Anything missing from the file is deleted on apply.
+- Add a team's game to `GAMES` once its package is on `main`. Domains: `railway domain --service <game> --port 8080` per environment.

@@ -12,6 +12,39 @@ const NOT_IMPERATIVE =
 const EXEMPT = /^(?:Merge |Revert "|fixup! |squash! |amend! )/;
 
 /**
+ * Checks a Conventional-Commit subject line: "type(scope): description". Used for commit subjects
+ * and pull request titles, so both follow exactly the same rules.
+ * @param {string} subject
+ * @returns {{ problems: { rule: string, message: string }[], type: string | null, scope: string | null, breaking: boolean }}
+ */
+export function checkSubject(subject) {
+  /** @type {{ rule: string, message: string }[]} */
+  const problems = [];
+  const add = (rule, text) => problems.push({ rule, message: text });
+
+  const m = SUBJECT.exec(subject);
+  if (!m) {
+    add(
+      "format",
+      `Subject must look like "type(scope): description" with a type from ${COMMIT_TYPES.join(", ")}; got "${subject}".`,
+    );
+  } else {
+    if (!COMMIT_TYPES.includes(m[1]))
+      add("type", `Unknown type "${m[1]}". Use one of: ${COMMIT_TYPES.join(", ")}.`);
+    if (/^[A-Z]/.test(m[4]))
+      add("case", `The description must start with a lowercase letter ("${m[4].slice(0, 20)}...").`);
+    if (NOT_IMPERATIVE.test(m[4]))
+      add(
+        "mood",
+        `Write the description in the imperative mood ("add login page", not "${m[4].split(" ")[0]}").`,
+      );
+  }
+  if (subject.length > 72) add("length", `Subject is ${subject.length} characters; keep it to 72 or fewer.`);
+  if (subject.endsWith(".")) add("period", "Subject must not end with a period.");
+  return { problems, type: m?.[1] ?? null, scope: m?.[2] ?? null, breaking: Boolean(m?.[3]) };
+}
+
+/**
  * @param {string} message the full commit message
  * @param {{ stripComments?: boolean }} [opts] strip "#" lines, as git does for a message written in an editor
  * @returns {{ ok: boolean, exempt: boolean, subject: string, problems: { rule: string, message: string }[] }}
@@ -34,25 +67,7 @@ export function checkCommit(message, opts = {}) {
     return { ok: false, exempt: false, subject, problems };
   }
 
-  const m = SUBJECT.exec(subject);
-  if (!m) {
-    add(
-      "format",
-      `Subject must look like "type(scope): description" with a type from ${COMMIT_TYPES.join(", ")}; got "${subject}".`,
-    );
-  } else {
-    if (!COMMIT_TYPES.includes(m[1]))
-      add("type", `Unknown type "${m[1]}". Use one of: ${COMMIT_TYPES.join(", ")}.`);
-    if (/^[A-Z]/.test(m[4]))
-      add("case", `The description must start with a lowercase letter ("${m[4].slice(0, 20)}...").`);
-    if (NOT_IMPERATIVE.test(m[4]))
-      add(
-        "mood",
-        `Write the description in the imperative mood ("add login page", not "${m[4].split(" ")[0]}").`,
-      );
-  }
-  if (subject.length > 72) add("length", `Subject is ${subject.length} characters; keep it to 72 or fewer.`);
-  if (subject.endsWith(".")) add("period", "Subject must not end with a period.");
+  problems.push(...checkSubject(subject).problems);
   if (rest.length > 0 && rest[0].trim() !== "")
     add("blank-line", "Leave a blank line between the subject and the body.");
 

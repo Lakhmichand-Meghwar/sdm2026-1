@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { checkRelease, prFromEvent, REQUIRED_CHECKS } from "./check-release.mjs";
 
@@ -16,6 +17,36 @@ const gate = (over: Record<string, unknown> = {}, runs = green) =>
 const rules = (r: { problems: { rule: string }[] }) => r.problems.map((p) => p.rule);
 
 describe("checkRelease", () => {
+  it("ci.yml job names and both rulesets match REQUIRED_CHECKS exactly", () => {
+    const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
+    const jobNames = [...read(".github/workflows/ci.yml").matchAll(/^ {4}name: "?(.+?)"?$/gm)].map(
+      (m) => m[1],
+    );
+    expect(jobNames).toEqual(REQUIRED_CHECKS);
+    for (const ruleset of [".github/rulesets/main.json", ".github/rulesets/prod.json"]) {
+      const rules = JSON.parse(read(ruleset)).rules as {
+        type: string;
+        parameters?: { required_status_checks?: { context: string }[] };
+      }[];
+      const contexts =
+        rules
+          .find((r) => r.type === "required_status_checks")
+          ?.parameters?.required_status_checks?.map((c) => c.context) ?? [];
+      expect(contexts.filter((c) => c !== "release gate")).toEqual(REQUIRED_CHECKS);
+    }
+  });
+
+  it("requires every CI job from ci.yml", () => {
+    expect(REQUIRED_CHECKS).toEqual([
+      "🧰 setup",
+      "📝 config",
+      "🧹 lint",
+      "🔎 typecheck",
+      "🧪 test",
+      "📦 build",
+    ]);
+  });
+
   it("opens for a release from main with green CI and a rollback plan", () => {
     expect(gate()).toEqual({ ok: true, problems: [] });
   });
@@ -39,18 +70,16 @@ describe("checkRelease", () => {
     "blocks when CI %s",
     (_n, runs) => {
       const r = gate({}, runs);
-      expect(rules(r)).toEqual(["ci", "ci", "ci"]);
+      expect(rules(r)).toEqual(REQUIRED_CHECKS.map(() => "ci"));
       expect(r.problems[0].message).toContain("has not run on 0123456");
     },
   );
 
-  it("blocks when one OS failed, and names it", () => {
-    const runs = green.map((r) =>
-      r.name === "checks (windows-latest)" ? { ...r, conclusion: "failure" } : r,
-    );
+  it("blocks when one job failed, and names it", () => {
+    const runs = green.map((r) => (r.name === "🧪 test" ? { ...r, conclusion: "failure" } : r));
     const r = gate({}, runs);
     expect(r.problems).toHaveLength(1);
-    expect(r.problems[0].message).toContain('"checks (windows-latest)" failure');
+    expect(r.problems[0].message).toContain('"🧪 test" failure');
   });
 
   it("blocks while a job is still running", () => {
@@ -59,10 +88,11 @@ describe("checkRelease", () => {
   });
 
   it("uses the newest run of a job, so a green rerun fixes a red run", () => {
-    const rerun = { name: "checks (macos-latest)", status: "completed", conclusion: "success", id: 99 };
-    const runs = [{ ...green[2], conclusion: "failure", id: 1 }, rerun, green[0], green[1]];
+    const others = green.filter((r) => r.name !== "📦 build");
+    const rerun = { name: "📦 build", status: "completed", conclusion: "success", id: 99 };
+    const runs = [{ ...rerun, conclusion: "failure", id: 1 }, rerun, ...others];
     expect(gate({}, runs).ok).toBe(true);
-    const newestRed = [{ ...rerun, conclusion: "failure" }, { ...green[2], id: 1 }, green[0], green[1]];
+    const newestRed = [{ ...rerun, conclusion: "failure" }, { ...rerun, id: 1 }, ...others];
     expect(gate({}, newestRed).ok).toBe(false);
   });
 
@@ -88,7 +118,7 @@ describe("checkRelease", () => {
 
   it("reports every problem at once", () => {
     const r = gate({ headRef: "x", draft: true, body: "" }, []);
-    expect(rules(r)).toEqual(["head", "draft", "ci", "ci", "ci", "rollback"]);
+    expect(rules(r)).toEqual(["head", "draft", ...REQUIRED_CHECKS.map(() => "ci"), "rollback"]);
   });
 });
 

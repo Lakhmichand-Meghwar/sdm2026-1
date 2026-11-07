@@ -1,5 +1,6 @@
 // Validates a pull request against its template. Pure: the caller passes the PR data and the
 // template texts, so the same rules run in CI, locally and in tests.
+import { checkSubject } from "./check-commit.mjs";
 import { baseFor, kindOfMainPr, WORK_BRANCH } from "./rules.mjs";
 import { headingsOf, sectionsOf, stripComments } from "./template.mjs";
 
@@ -48,7 +49,7 @@ export function detectPrType(body, templates) {
  *   base: string,
  *   labels?: string[] | null,
  *   type?: string | null,
- *   config: { teamLabels: string[] },
+ *   config: { teamLabels: string[], types?: Record<string, { commitTypes: string[] }> },
  *   templates: Record<string, string>,
  *   classification?: { undecided?: boolean, type?: string, rule?: string } | null,
  * }} input templates: PR type -> template Markdown
@@ -71,13 +72,20 @@ export function checkPr({
   const warnings = [];
   const add = (rule, message) => problems.push({ rule, message });
 
-  // Title: "[team-label] Summary"
-  const t = /^\[([^\]]+)\]\s+(\S.*)$/.exec(title.trim());
-  const titleLabel = t?.[1] ?? null;
-  if (!t) {
-    add("title", `Title must look like "[<team-label>] Short summary" (got "${title.trim()}").`);
-  } else if (!config.teamLabels.includes(t[1])) {
-    add("title", `"[${t[1]}]" is not a team label. Use one of: ${config.teamLabels.join(", ")}.`);
+  // Title: Conventional Commits like a commit subject, with the team label as the scope,
+  // e.g. "feat(team-2): add login page" (see "Pull request" in CLAUDE.md).
+  const subject = checkSubject(title.trim());
+  for (const p of subject.problems) add("title", `Title: ${p.message}`);
+  let titleLabel = null;
+  if (subject.type && !subject.scope) {
+    add("title", `The title needs the team label as its scope, e.g. "${subject.type}(team-2): ...".`);
+  } else if (subject.scope && !config.teamLabels.includes(subject.scope)) {
+    add(
+      "title",
+      `The title's scope "${subject.scope}" is not a team label. Use one of: ${config.teamLabels.join(", ")}.`,
+    );
+  } else {
+    titleLabel = subject.scope;
   }
 
   // Labels: exactly one team label, matching the title.
@@ -86,7 +94,7 @@ export function checkPr({
     if (team.length !== 1) {
       add("labels", `Needs exactly one team label (${config.teamLabels.join(", ")}); has ${team.length}.`);
     } else if (titleLabel && titleLabel !== team[0]) {
-      add("labels", `Title says [${titleLabel}] but the team label is ${team[0]}.`);
+      add("labels", `The title's scope is ${titleLabel} but the team label is ${team[0]}.`);
     }
   }
 
@@ -107,7 +115,7 @@ export function checkPr({
           `Branch "${head}" must be named <team-label>/<issue-number>-<short-description>, e.g. team-2/14-add-login.`,
         );
       } else if (titleLabel && m[1] !== titleLabel) {
-        add("branch", `Branch label "${m[1]}" differs from the title label "${titleLabel}".`);
+        add("branch", `Branch label "${m[1]}" differs from the title's scope "${titleLabel}".`);
       }
     }
     const expected = baseFor(head, config.teamLabels);
@@ -143,6 +151,18 @@ export function checkPr({
     return { ok: false, type: chosen, problems, warnings };
   }
 
+  // The title's type matches the template: feat for a feature PR, fix for a bug PR, and so on.
+  // Release and sync PRs have no commit type of their own; they use chore.
+  const allowedTypes = config.types?.[chosen]?.commitTypes?.length
+    ? config.types[chosen].commitTypes
+    : ["chore"];
+  if (subject.type && !allowedTypes.includes(subject.type)) {
+    add(
+      "title",
+      `A ${chosen} PR's title starts with ${allowedTypes.join(" or ")}, not "${subject.type}" (e.g. "${allowedTypes[0]}(${titleLabel ?? "team-2"}): ...").`,
+    );
+  }
+
   // Every heading of the template, in order, with content.
   const sections = sectionsOf(body);
   const required = headingsOf(templates[chosen]);
@@ -174,7 +194,7 @@ export function checkPr({
       if (!config.teamLabels.includes(team)) {
         add("team", `"## Team" must be a team label (${config.teamLabels.join(", ")}), got "${team}".`);
       } else if (titleLabel && team !== titleLabel) {
-        add("team", `"## Team" says ${team} but the title says [${titleLabel}].`);
+        add("team", `"## Team" says ${team} but the title's scope is ${titleLabel}.`);
       }
     } else if (heading === "Checklist") {
       const boxes = content.split(/\r?\n/).filter((l) => /^\s*-\s*\[[ xX]\]/.test(l));

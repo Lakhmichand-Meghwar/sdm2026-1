@@ -23,7 +23,7 @@ gh api -X POST repos/nd2003/sdm2026-1/rulesets --input .github/rulesets/main.jso
 
 ## Notes
 
-- The status check names must match the job names in `.github/workflows/`: `release gate` (`release-gate.yml`) and `checks (<os>)` (`ci.yml`). Rename a job and the ruleset must change with it, or merging stops.
+- The status check names must match the job names in `.github/workflows/`: `release gate` (`release-gate.yml`) and `🧰 setup`, `📝 config`, `🧹 lint`, `🔎 typecheck`, `🧪 test` and `📦 build` (`ci.yml`, emoji included). Rename a job and the ruleset (and `REQUIRED_CHECKS` in `server/tooling/check-release.mjs`) must change with it, or merging stops.
 - `release gate` only exists once `release-gate.yml` is on `main`. Import `prod.json` after that, or no PR into `prod` can ever pass.
 - When the pull request checks from the workflow tooling land (`pull request follows the template`, from `workflow-checks.yml`), add them to `required_status_checks` in `main.json`.
 - Nobody can bypass `prod.json`. If an admin needs to, they edit the ruleset first, and that change is visible in the audit log.

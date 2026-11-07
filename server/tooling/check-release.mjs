@@ -16,7 +16,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 /** The CI jobs (see .github/workflows/ci.yml) that must have passed on the commit being released. */
-export const REQUIRED_CHECKS = ["checks (ubuntu-latest)", "checks (windows-latest)", "checks (macos-latest)"];
+export const REQUIRED_CHECKS = ["🧰 setup", "📝 config", "🧹 lint", "🔎 typecheck", "🧪 test", "📦 build"];
 
 /** @param {string} md */
 function rollbackSection(md) {

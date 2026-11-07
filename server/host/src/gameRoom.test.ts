@@ -3,7 +3,7 @@ import config from "@colyseus/tools";
 import { runReplay } from "@sdm/core/server";
 import type { Replay } from "@sdm/core/shared";
 import { counterConfig, makeCounterGame } from "@sdm/core/testing";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createGameRoom, LiveRoomRegistry } from "./gameRoom.ts";
 import { captureLog } from "./testing/captureLog.ts";
 
@@ -62,8 +62,9 @@ describe("createGameRoom", () => {
     expect(room.metadata).toMatchObject({ code });
     expect(registry.byCode(code)?.roomId).toBe(room.roomId);
     const client = await colyseus.sdk.joinById(room.roomId, { name: "Ada" });
-    await room.waitForNextPatch();
-    expect(client.state.seats.size).toBe(1);
+    // The client decodes its first state some time after the join resolves; on a slow CI runner that
+    // can be after the server's next patch, so wait for the client's own copy instead of assuming it.
+    await vi.waitFor(() => expect(client.state.seats?.size).toBe(1), { timeout: 2000, interval: 20 });
     expect(log.lines.some((l) => l.message === "room created" && l.fields.code === code)).toBe(true);
   });
 

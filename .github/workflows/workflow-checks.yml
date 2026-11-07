@@ -1,4 +1,4 @@
-# Checks that every pull request and its commits follow the workflow: [label] title, one team label, branch and base
+# Checks that every pull request and its commits follow the workflow: Conventional title, one team label, branch and base
 # branch names, template headings filled, linked issue, ticked checklist (pnpm check:pr, issue #42).
 # Separate from ci.yml so a template problem is reported on its own. Owner: platform team.
 name: Workflow checks
@@ -8,10 +8,9 @@ on:
     # "edited" re-runs the check when the title or description is fixed.
     types: [opened, edited, synchronize, reopened, labeled, unlabeled]
 
-# A newer run for the same PR replaces the one still in progress.
-concurrency:
-  group: workflow-checks-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group on purpose. Opening a PR with a label fires "opened" and "labeled" at the same
+# moment; cancelling one of the two leaves a cancelled run on the commit and the PR reads UNSTABLE.
+# The job takes seconds, so letting both finish is cheaper (issue #94).
 
 permissions:
   contents: read

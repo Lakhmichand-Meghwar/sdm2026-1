@@ -1,12 +1,17 @@
 # CI for the shared workspace (platform in server/, team games in games/team-N/).
 # Every game is a workspace package, so a platform change is only green when every game still builds.
-# Owner: platform team (issue #8).
+# One job per check, so a pull request shows exactly which one failed. Linux only: every game deploys
+# to Railway, which runs Linux. Owner: platform team (issues #8, #81).
+#
+# The job names (emoji included) are the required status checks in .github/rulesets/*.json and
+# REQUIRED_CHECKS in server/tooling/check-release.mjs; check-release.test.ts fails if they drift.
 name: CI
 
 on:
   pull_request:
+  # prod too: Railway's Wait for CI only waits for check suites that run on the deployed branch.
   push:
-    branches: [main]
+    branches: [main, prod]
 
 # A new push to the same PR cancels the run still in progress for it.
 concurrency:
@@ -17,45 +22,58 @@ permissions:
   contents: read
 
 jobs:
-  check:
-    # Runs on every OS the team develops on, so a change that only works on one shows up red.
-    name: checks (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+  setup:
+    # Node/pnpm pins, LF line endings, no file names that differ only by case.
+    name: "🧰 setup"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm check:setup --ci
 
-      # Version comes from "packageManager" in package.json.
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+  config:
+    # Each game's config/game.json against its config schema.
+    name: "📝 config"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm check:config
 
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
+  lint:
+    name: "🧹 lint"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm lint
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
+  typecheck:
+    name: "🔎 typecheck"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm typecheck
 
-      # Node/pnpm pins, LF line endings, no file names that differ only by case.
-      - name: Setup check
-        run: pnpm check:setup --ci
+  test:
+    name: "🧪 test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm test
 
-      # Each game's config/game.json against its config schema. Needs the installed dependencies.
-      - name: Game config check
-        run: pnpm check:config
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
+  build:
+    name: "📦 build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: pnpm build

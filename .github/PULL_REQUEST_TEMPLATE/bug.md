@@ -1,5 +1,6 @@
 <!--
-Title: [<team-label>] Short imperative summary, e.g. "[team-2] Add login page".
+Title: Conventional Commits, like a commit subject: "type(<team-label>): subject", lowercase
+imperative, at most 72 characters, no period. Type: fix. Example: "fix(team-2): stop players walking through walls".
 Add the same team label to this PR as to its issue.
 Fill in every section. Don't delete or rename the headings; `pnpm check:pr` and the evaluation read
 them. Write "None" if a section does not apply. Remove these comments when you are done.
@@ -38,7 +39,7 @@ team-
 
 - [ ] The PR closes an issue with `Closes #N`, and that issue has a team label
 - [ ] This PR has the same team label as the issue
-- [ ] The title starts with `[<team-label>]`
+- [ ] The title follows Conventional Commits with the team label as the scope: `type(<team-label>): subject`
 - [ ] The branch is named `<team-label>/<issue-number>-<short-description>`
 - [ ] Changes only touch my own team's folder (see CLAUDE.md), or the issue explains why not
 - [ ] Commits follow Conventional Commits and reference the issue (`Refs #N`)

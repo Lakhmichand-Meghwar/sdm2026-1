@@ -24,7 +24,7 @@ for (let index = 0; index < windowCount; index += 1) {
   const page = await context.newPage();
   try {
     await page.goto("http://localhost:5173");
-  } catch (e) {
+  } catch (_e) {
     console.log("Dev server not running yet, keeping window open.");
   }
   browsers.push(browser);

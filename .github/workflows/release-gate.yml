@@ -10,9 +10,8 @@ on:
     # CI results arrive after the PR is opened, so re-run when the description is edited or new commits land.
     types: [opened, edited, synchronize, reopened, ready_for_review, converted_to_draft]
 
-concurrency:
-  group: release-gate-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency group on purpose: a cancelled duplicate run would stay on the release PR next to the
+# real one, and this is a required check. Every run reads the same CI results, so duplicates agree (#94).
 
 permissions:
   contents: read

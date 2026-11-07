@@ -33,7 +33,7 @@ Use `origin/main` as `<base-ref>` for platform and instructor work, `origin/feat
 
 Read the file named in `template`. Write the PR body to a scratch file (not into the repo) that keeps **every `##` heading, in order, with the exact same text**. Remove the HTML comments.
 
-- **Title:** `[<label>] <short imperative summary>`.
+- **Title:** Conventional Commits with the label as the scope, like a commit subject: `<type>(<label>): <short imperative summary>`, lowercase, at most 72 characters, no period. Use the `commitType` from the classification (`feat` for feature, `fix` for bug, `docs`, `refactor`, a chore type, or `chore` for release and sync), e.g. `feat(team-2): add login page`.
 - **Linked issue:** `Closes #<n>` (work PRs) or `Refs #<n>` (release and sync).
 - **Team:** the label, as plain text.
 - **Summary:** what changed and why, from the diff and the issue. Add the type-specific sections (Root cause, Pages affected, Impact, Behaviour unchanged, Included changes, Rollback) when the template has them.

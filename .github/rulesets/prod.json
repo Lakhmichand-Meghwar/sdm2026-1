@@ -26,9 +26,12 @@
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
           { "context": "release gate" },
-          { "context": "checks (ubuntu-latest)" },
-          { "context": "checks (windows-latest)" },
-          { "context": "checks (macos-latest)" }
+          { "context": "🧰 setup" },
+          { "context": "📝 config" },
+          { "context": "🧹 lint" },
+          { "context": "🔎 typecheck" },
+          { "context": "🧪 test" },
+          { "context": "📦 build" }
         ]
       }
     }

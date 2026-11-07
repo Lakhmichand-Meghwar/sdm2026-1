@@ -103,7 +103,7 @@ The checks live in `server/tooling/workflow/` with the rest of the workflow tool
 
 ## CI
 
-Every pull request and every push to `main` runs the **CI** checks (`.github/workflows/ci.yml`) on Ubuntu, Windows and macOS: `pnpm install --frozen-lockfile`, `pnpm check:setup --ci`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`, the same commands as above. A red check on any OS means the PR is not ready for review.
+Every pull request and every push to `main` runs the **CI** checks (`.github/workflows/ci.yml`) on Linux, one job per check so a PR shows exactly which one failed: 🧰 setup (`pnpm check:setup --ci`), 📝 config (`pnpm check:config`), 🧹 lint, 🔎 typecheck, 🧪 test and 📦 build, the same commands as above. Each job installs with `pnpm install --frozen-lockfile` through the shared `.github/actions/setup`. Only Linux runs, because every game deploys to Railway, which is Linux. A red check means the PR is not ready for review.
 
 - It covers every package in the workspace, so a platform PR only passes when every team's game still builds.
 - `--frozen-lockfile` fails when `pnpm-lock.yaml` is out of date: run `pnpm install` and commit the lockfile.

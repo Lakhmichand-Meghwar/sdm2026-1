@@ -1,6 +1,6 @@
 <!--
-Title format: [<team-label>] Short imperative summary
-Example:      [team-2] Add login page
+Title format: type(<team-label>): short imperative summary (Conventional Commits, like a commit subject)
+Example:      feat(team-2): add login page
 
 Fill in every section below. Don't delete or rename the headings: PRs are
 reviewed and evaluated (including by AI) at the end of the course, and the
@@ -37,7 +37,7 @@ team-
 
 - [ ] The PR closes an issue with `Closes #N`, and that issue has a team label
 - [ ] This PR has the same team label as the issue
-- [ ] The title starts with `[<team-label>]`
+- [ ] The title follows Conventional Commits with the team label as the scope: `type(<team-label>): subject`
 - [ ] The branch is named `<team-label>/<issue-number>-<short-description>`
 - [ ] Changes only touch my own team's folder (see AGENTS.md), or the issue explains why not
 - [ ] Commits follow Conventional Commits and reference the issue (`Refs #N`)

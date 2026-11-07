@@ -30,8 +30,17 @@ function fill(type: string, over: { linked?: string; team?: string } = {}) {
     .replace(/(## [^\n]+\n)\s*(?=## |(?![\s\S]))/g, "$1\nNone\n\n");
 }
 
+// The Conventional-Commit type each template's title starts with.
+const TITLE_TYPE: Record<string, string> = {
+  feature: "feat",
+  bug: "fix",
+  docs: "docs",
+  chore: "chore",
+  refactor: "refactor",
+};
+
 const work = {
-  title: "[team-2] Add login",
+  title: "feat(team-2): add login",
   head: "team-2/12-add-login",
   base: "feature/team-2",
   labels: ["team-2"],
@@ -49,7 +58,7 @@ describe("every PR template", () => {
   });
 
   it.each(["feature", "bug", "docs", "chore", "refactor"])("a filled %s template passes", (type) => {
-    const r = check({}, fill(type));
+    const r = check({ title: `${TITLE_TYPE[type]}(team-2): add login` }, fill(type));
     expect(r.problems).toEqual([]);
     expect(r.type).toBe(type);
   });
@@ -70,12 +79,43 @@ describe("work PRs", () => {
   });
 
   it("detects the bug template from its own heading", () => {
-    expect(check({}, fill("bug"))).toMatchObject({ ok: true, type: "bug" });
+    expect(check({ title: "fix(team-2): stop the login loop" }, fill("bug"))).toMatchObject({
+      ok: true,
+      type: "bug",
+    });
   });
 
-  it("rejects a title without a [label] prefix or with an unknown one", () => {
-    expect(rules(check({ title: "Add login" }))).toContain("title");
-    expect(check({ title: "[frontend] Add login" }).problems[0].message).toContain("not a team label");
+  it("uses Conventional Commits for the title, with the team label as the scope", () => {
+    expect(check({ title: "feat(team-2): add login" }).problems).toEqual([]);
+    expect(check({ title: "feat(team-2)!: drop the old login" }).problems).toEqual([]);
+  });
+
+  it("rejects the old [label] title and titles without a valid scope", () => {
+    expect(check({ title: "[team-2] Add login" }).problems[0].message).toContain("type(scope): description");
+    expect(rules(check({ title: "add login" }))).toContain("title");
+    expect(check({ title: "feat: add login" }).problems[0].message).toContain("team label as its scope");
+    expect(check({ title: "feat(frontend): add login" }).problems[0].message).toContain("not a team label");
+  });
+
+  it("applies the commit subject rules to the title", () => {
+    const message = (title: string) =>
+      check({ title })
+        .problems.map((p) => p.message)
+        .join(" ");
+    expect(message("feat(team-2): Add login")).toContain("lowercase");
+    expect(message("feat(team-2): added login")).toContain("imperative");
+    expect(message("feat(team-2): add login.")).toContain("period");
+    expect(message(`feat(team-2): add ${"x".repeat(70)}`)).toContain("72 or fewer");
+    expect(message("wip(team-2): add login")).toContain('Unknown type "wip"');
+  });
+
+  it("needs a title type that matches the template", () => {
+    expect(check({ title: "fix(team-2): add login" }).problems[0].message).toContain(
+      "feature PR's title starts with feat",
+    );
+    expect(rules(check({ title: "feat(team-2): stop the loop" }, fill("bug")))).toEqual(["title"]);
+    expect(check({ title: "chore(team-2): bump deps" }, fill("chore")).problems).toEqual([]);
+    expect(check({ title: "ci(team-2): cache pnpm" }, fill("chore")).problems).toEqual([]);
   });
 
   it("needs exactly one team label, matching the title", () => {
@@ -87,7 +127,7 @@ describe("work PRs", () => {
   it("rejects a badly named branch and a branch label that differs from the title", () => {
     expect(rules(check({ head: "my-fix" }))).toContain("branch");
     expect(check({ head: "team-1/12-add-login" }).problems[0].message).toContain(
-      "differs from the title label",
+      "differs from the title's scope",
     );
   });
 
@@ -99,7 +139,7 @@ describe("work PRs", () => {
 
   it("platform work targets main", () => {
     const r = check(
-      { title: "[platform] Add CI", head: "platform/8-ci", base: "main", labels: ["platform"] },
+      { title: "feat(platform): add ci checks", head: "platform/8-ci", base: "main", labels: ["platform"] },
       fill("feature", { team: "platform" }),
     );
     expect(r.problems).toEqual([]);
@@ -117,7 +157,7 @@ describe("work PRs", () => {
   it("rejects a Team section that is a placeholder or differs from the title", () => {
     expect(rules(check({}, fill("feature", { team: "team-" })))).toContain("team");
     expect(check({}, fill("feature", { team: "team-1" })).problems[0].message).toContain(
-      "title says [team-2]",
+      "the title's scope is team-2",
     );
   });
 
@@ -159,13 +199,13 @@ describe("work PRs", () => {
 
 describe("PRs from main", () => {
   const release = {
-    title: "[platform] Release main to prod",
+    title: "chore(platform): release main to prod",
     head: "main",
     base: "prod",
     labels: ["platform"],
   };
   const sync = {
-    title: "[platform] Bring feature/team-1 up to date",
+    title: "chore(platform): bring feature/team-1 up to date with main",
     head: "main",
     base: "feature/team-1",
     labels: ["platform"],

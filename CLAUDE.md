@@ -136,7 +136,7 @@ Every change goes through the same path: **issue → branch → commits → pull
 - One pull request per issue.
 - Fill in every section of the [pull request template](.github/pull_request_template.md). Don't delete or rename its headings.
 - The PR must carry the same team label as its issue.
-- The title starts with the team name: `[team-2] Add login page`.
+- The title follows [Conventional Commits](https://www.conventionalcommits.org/), like a commit subject, with the team label as the scope: `feat(team-2): add login page`. The type matches the PR template (`feat` for a feature, `fix` for a bug, `docs`, `refactor`, or `chore`/`ci`/`build`/`test`/`perf` for a chore; `chore` for release and sync PRs). Issue titles keep the `[team-2] Add login page` form.
 - The description links the issue with a closing keyword (`Closes #14`) and summarizes what changed and how it was tested.
 - Set the base branch as described in [Branches](#branches): `feature/team-N` for a work branch, `main` for a feature branch (and for platform and instructor work), `prod` for a release.
 - Keep the PR focused. Unrelated changes go in their own issue and PR.
