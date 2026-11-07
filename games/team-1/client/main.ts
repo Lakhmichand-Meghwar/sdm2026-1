@@ -1,5 +1,5 @@
 import { Client, type Room } from "@colyseus/sdk";
-import { normalizeRoomCode, readClientParams } from "@sdm/core/client";
+import { normalizeRoomCode, readClientParams, serverUrlFromPage } from "@sdm/core/client";
 import { JoinByCodeResponseSchema, Routes, ServerMessage } from "@sdm/core/shared";
 import { timeLoopGame } from "../shared/game.ts";
 import type { TimeLoopInput, TimeLoopState } from "../shared/index.ts";
@@ -10,10 +10,16 @@ import { TAPS } from "./targets.ts";
 import * as ui from "./ui.ts";
 import * as view from "./view.ts";
 
-/** In local dev the server runs on :2567 of whatever host served the page, so a phone on the LAN works too. */
+/**
+ * In local dev the server runs on :2567 of whatever host served the page, so a phone on the LAN works too.
+ * Deployed builds are served by the server itself, possibly under a path (`<address>/team-1/` behind the
+ * gateway), so the address comes from the page, not `location.origin`.
+ */
 const SERVER_URL: string =
   import.meta.env.VITE_SERVER_URL ??
-  (import.meta.env.DEV ? `${location.protocol}//${location.hostname}:2567` : location.origin);
+  (import.meta.env.DEV
+    ? `${location.protocol}//${location.hostname}:2567`
+    : serverUrlFromPage(location.href));
 
 const ROOM_NAME = "game";
 const TOKEN_KEY = "sdm:tle:token";

@@ -28,6 +28,8 @@ function networkAddress(): Plugin {
 }
 
 export default defineConfig({
+  // Relative asset paths: the same build works at the root of its own server and under /team-1/ behind the gateway.
+  base: "./",
   plugins: [networkAddress()],
   server: { port: 5173, strictPort: true, host: true },
   build: { outDir: "dist", emptyOutDir: true },
