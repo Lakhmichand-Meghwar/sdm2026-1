@@ -1,9 +1,13 @@
 // Enforces "work inside your own team's folder" (CLAUDE.md): a work branch may change files its label
-// owns and shared files. Another owner's files are an error, unless the issue carries the
-// "cross-team" label, which says the issue explains why; then they are warnings.
+// owns and shared files. Another owner's files are an error, unless the issue explains why on a line
+// of its own, "Cross-team: <why>"; then they are warnings.
 import { ownerOf } from "./ownership.mjs";
 
-export const CROSS_TEAM_LABEL = "cross-team";
+/** A line in the issue body like "Cross-team: the fix for #86 needs the report's tests". */
+const CROSS_TEAM_LINE = /^\s*(?:[-*]\s*)?\**cross-team\**:\s*\S/im;
+
+/** Whether an issue body explains why the work touches another team's files. @param {string | null | undefined} body */
+export const explainsCrossTeam = (body) => CROSS_TEAM_LINE.test(body ?? "");
 
 /**
  * @param {{
@@ -22,7 +26,8 @@ export function checkOwnership({ label, files, ownership, crossTeam }) {
     return {
       problems: [],
       warnings: foreign.map(
-        ({ file, owner }) => `${file} is owned by ${owner} (allowed: the issue is ${CROSS_TEAM_LABEL}).`,
+        ({ file, owner }) =>
+          `${file} is owned by ${owner} (allowed: the issue explains why in "Cross-team:").`,
       ),
     };
   }
@@ -31,7 +36,7 @@ export function checkOwnership({ label, files, ownership, crossTeam }) {
       rule: "ownership",
       file,
       message: `Owned by ${owner}, but this branch is ${label} work.`,
-      fix: `Move it to a ${owner} issue, or add the "${CROSS_TEAM_LABEL}" label to the issue and explain why there.`,
+      fix: `Move it to a ${owner} issue, or add a line "Cross-team: <why>" to the issue.`,
     })),
     warnings: [],
   };

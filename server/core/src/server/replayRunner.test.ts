@@ -1,8 +1,9 @@
-import { SeededRandom } from "@sdm/core/shared";
+import { ReplaySchema, SeededRandom } from "@sdm/core/shared";
 import { describe, expect, it } from "vitest";
+import { guestFingerprint } from "./guest.ts";
 import { runReplay } from "./replayRunner.ts";
 import { GameCodeError, Simulation } from "./simulation.ts";
-import { makeCounterGame } from "./testing/counterGame.ts";
+import { Mover, makeCounterGame } from "./testing/counterGame.ts";
 
 function scriptedSim(ticks: number) {
   const def = makeCounterGame();
@@ -129,5 +130,70 @@ describe("review fixes", () => {
     const replay = sim.snapshot();
     expect(replay.failure).toMatchObject({ hook: "join", tick: 0 });
     expect(() => runReplay(def, replay)).toThrow("join threw at tick 0: join boom");
+  });
+});
+
+describe("guests in replays", () => {
+  const ada = "1d2c3b4a-5f6e-4d7c-8b9a-0f1e2d3c4b5a";
+  const bo = "9a8b7c6d-5e4f-4a3b-9c2d-1e0f9a8b7c6d";
+  /** Names each mover after its guest, the way a game might restore a returning player. */
+  const guestGame = () =>
+    makeCounterGame({
+      join(ctx, playerId, _options, { guest }) {
+        const returning = [...ctx.state.movers.values()].filter((m) => m.name === guest && guest !== "");
+        ctx.state.coins += returning.length;
+        ctx.state.movers.set(playerId, Object.assign(new Mover(), { name: guest, x: ctx.rng.int(0, 10) }));
+      },
+    });
+
+  function guestSim() {
+    const def = guestGame();
+    const sim = new Simulation(def, { seed: 3, roomId: "r", sha: "t", startedAt: "x", mode: "live" });
+    sim.join("p1", { name: "a", guestId: ada }, guestFingerprint("counter", ada));
+    sim.tick();
+    sim.join("p2", { name: "a again", guestId: ada }, guestFingerprint("counter", ada));
+    sim.join("p3", { name: "b", guestId: bo }, guestFingerprint("counter", bo));
+    sim.join("p4", { name: "c" });
+    for (let i = 0; i < 5; i++) sim.tick();
+    return { def, sim };
+  }
+
+  it("a replay with guests reproduces its hash, and its JSON has no raw guest ID", () => {
+    const { def, sim } = guestSim();
+    expect(sim.state.coins).toBeGreaterThan(0);
+    const replay = ReplaySchema.parse(JSON.parse(JSON.stringify(sim.snapshot())));
+    const json = JSON.stringify(replay);
+    expect(json).not.toContain(ada);
+    expect(json).not.toContain(bo);
+    const result = runReplay(def, replay);
+    expect(result.stateHash).toBe(replay.final?.stateHash);
+    expect(result.state.seats.get("p2")?.guest).toBe(guestFingerprint("counter", ada));
+    expect(result.state.seats.get("p4")?.guest).toBe("");
+  });
+
+  it("the recorded guest matters: dropping it changes the hash", () => {
+    const { def, sim } = guestSim();
+    const replay = sim.snapshot();
+    const stripped = {
+      ...replay,
+      events: replay.events.map((e) => (e.type === "join" ? { ...e, guest: "" } : e)),
+    };
+    expect(runReplay(def, stripped).stateHash).not.toBe(replay.final?.stateHash);
+  });
+
+  it('an old replay without guest fields still runs, with every guest ""', () => {
+    const def = makeCounterGame();
+    const sim = new Simulation(def, { seed: 5, roomId: "r", sha: "t", startedAt: "x", mode: "live" });
+    sim.join("p1", { name: "a" });
+    sim.tick();
+    sim.join("p2", { name: "b" });
+    sim.tick();
+    const old = JSON.parse(JSON.stringify(sim.snapshot())) as { events: Record<string, unknown>[] };
+    for (const event of old.events) delete event.guest;
+    expect(JSON.stringify(old)).not.toContain('"guest"');
+    const replay = ReplaySchema.parse(old);
+    const result = runReplay(def, replay);
+    expect(result.stateHash).toBe(replay.final?.stateHash);
+    expect(result.state.seats.get("p1")?.guest).toBe("");
   });
 });

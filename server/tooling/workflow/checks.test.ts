@@ -8,7 +8,7 @@ import { contractWarnings } from "./lib/check-contract.mjs";
 import { isSimulationFile, scanSource } from "./lib/check-determinism.mjs";
 import { checkDocs, extractLinks, slugify } from "./lib/check-docs.mjs";
 import { addedLines, checkFiles, findSecrets } from "./lib/check-files.mjs";
-import { checkOwnership } from "./lib/check-ownership.mjs";
+import { checkOwnership, explainsCrossTeam } from "./lib/check-ownership.mjs";
 
 const teamLabels = ["team-1", "team-2", "team-3", "team-4", "platform", "team-instructor"];
 const rules = (problems: { rule: string }[]) => problems.map((p) => p.rule);
@@ -95,6 +95,20 @@ describe("check:ownership", () => {
     const allowed = checkOwnership({ label: "team-1", files, ownership, crossTeam: true });
     expect(allowed.problems).toEqual([]);
     expect(allowed.warnings).toHaveLength(2);
+  });
+});
+
+describe("explainsCrossTeam", () => {
+  it('finds a "Cross-team: <why>" line, in any case and as a list item or bold', () => {
+    expect(explainsCrossTeam("## What changes\n\nCross-team: the fix needs the report's tests\n")).toBe(true);
+    expect(explainsCrossTeam("- cross-team: shared fixture")).toBe(true);
+    expect(explainsCrossTeam("**Cross-team:** shared fixture")).toBe(true);
+  });
+
+  it("needs a reason, on its own line", () => {
+    expect(explainsCrossTeam("Cross-team:")).toBe(false);
+    expect(explainsCrossTeam("This is not cross-team: work")).toBe(false);
+    expect(explainsCrossTeam(null)).toBe(false);
   });
 });
 

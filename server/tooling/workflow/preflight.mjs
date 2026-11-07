@@ -8,7 +8,7 @@
 //
 //   --quick                 the fast subset
 //   --base <branch>         compare against this base (default: the base the branch model expects)
-//   --offline               skip GitHub lookups (issue, cross-team label)
+//   --offline               skip GitHub lookups (the linked issue)
 //   --json                  machine-readable summary
 //
 // Exit codes: 0 everything passed, 1 a step failed, 2 usage error, 3 environment problem.

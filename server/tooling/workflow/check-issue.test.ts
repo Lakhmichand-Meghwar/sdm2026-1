@@ -23,7 +23,7 @@ const check = (over: Record<string, unknown>) =>
   checkIssue({
     title: "[team-2] Add login",
     body: valid.feature,
-    labels: ["team-2", "enhancement"],
+    labels: ["team-2"],
     config,
     templates,
     ...over,
@@ -49,7 +49,7 @@ describe("checkIssue", () => {
   });
 
   it("detects the bug template from its own headings and accepts it", () => {
-    expect(check({ body: valid.bug, labels: ["team-2", "bug"] })).toMatchObject({ ok: true, type: "bug" });
+    expect(check({ body: valid.bug, labels: ["team-2"] })).toMatchObject({ ok: true, type: "bug" });
   });
 
   it("rejects a title without a [label] prefix", () => {
@@ -63,7 +63,7 @@ describe("checkIssue", () => {
   });
 
   it("needs exactly one team label", () => {
-    expect(check({ labels: ["enhancement"] }).ok).toBe(false);
+    expect(check({ labels: ["stackpile"] }).ok).toBe(false);
     expect(check({ labels: ["team-1", "team-2"] }).ok).toBe(false);
   });
 
@@ -83,9 +83,7 @@ describe("checkIssue", () => {
   });
 
   it("accepts None as the content of a section", () => {
-    expect(check({ body: valid.bug.replace("Unknown yet", "None"), labels: ["team-2", "bug"] }).ok).toBe(
-      true,
-    );
+    expect(check({ body: valid.bug.replace("Unknown yet", "None"), labels: ["team-2"] }).ok).toBe(true);
   });
 
   it('needs a real "Done when" checkbox', () => {
@@ -100,9 +98,9 @@ describe("checkIssue", () => {
 
   it("rejects a body that mixes the headings of two templates", () => {
     const body = `${valid.bug}\n## Pages affected\n\n- README.md\n`;
-    expect(
-      check({ body, labels: ["team-2", "bug"] }).problems.map((p: { rule: string }) => p.rule),
-    ).toContain("template");
+    expect(check({ body, labels: ["team-2"] }).problems.map((p: { rule: string }) => p.rule)).toContain(
+      "template",
+    );
   });
 
   it("an explicit type is checked against that template", () => {

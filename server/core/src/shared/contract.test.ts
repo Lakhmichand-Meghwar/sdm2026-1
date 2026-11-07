@@ -4,6 +4,8 @@ import {
   BugReportSchema,
   DebugCommandSchema,
   DebugStatsSchema,
+  GUEST_FINGERPRINT_LENGTH,
+  GUEST_ID_OPTION,
   HealthResponseSchema,
   isDebugEnabled,
   JoinByCodeResponseSchema,
@@ -115,6 +117,42 @@ describe("replay v2", () => {
     expect(replay.events.map((e) => e.type)).toEqual(["join", "drop", "reconnect"]);
     expect(replay.truncated).toBe(false);
     expect(ReplaySchema.safeParse(base).success).toBe(false);
+  });
+});
+
+describe("guest in join events", () => {
+  const replay = (join: Record<string, unknown>) => ({
+    version: REPLAY_VERSION,
+    game: "sample",
+    roomId: "r1",
+    seed: 42,
+    tickRate: 30,
+    configVersion: "1",
+    config: { version: "1" },
+    sha: "abc123",
+    scenario: null,
+    startedAt: "2026-11-06T10:00:00Z",
+    events: [{ type: "join", tick: 0, playerId: "p1", ...join }],
+    final: null,
+  });
+  const joinGuest = (join: Record<string, unknown>) => {
+    const event = ReplaySchema.parse(replay(join)).events[0];
+    return event?.type === "join" ? event.guest : undefined;
+  };
+
+  it('defaults a missing guest to "", so old replays still parse', () => {
+    expect(joinGuest({})).toBe("");
+  });
+
+  it("accepts a 12-hex fingerprint and nothing that could be a raw guest ID", () => {
+    expect(joinGuest({ guest: "0123456789ab" })).toBe("0123456789ab");
+    for (const guest of [crypto.randomUUID(), "0123456789AB", "0123456789abc", "xyz"])
+      expect(ReplaySchema.safeParse(replay({ guest })).success).toBe(false);
+  });
+
+  it("names the join option and the fingerprint length", () => {
+    expect(GUEST_ID_OPTION).toBe("guestId");
+    expect(GUEST_FINGERPRINT_LENGTH).toBe(12);
   });
 });
 

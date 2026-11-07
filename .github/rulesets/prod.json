@@ -31,7 +31,8 @@
           { "context": "🧹 lint" },
           { "context": "🔎 typecheck" },
           { "context": "🧪 test" },
-          { "context": "📦 build" }
+          { "context": "📦 build" },
+          { "context": "instructor gate" }
         ]
       }
     }

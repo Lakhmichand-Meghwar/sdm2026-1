@@ -9,7 +9,7 @@ const normalize = (s) => s.trim().toLowerCase();
  *   body: string,
  *   labels?: string[] | null,
  *   type?: string | null,
- *   config: { teamLabels: string[], types: Record<string, { githubLabel: string | null }> },
+ *   config: { teamLabels: string[] },
  *   templates: Record<string, string>,
  * }} input templates: issue type -> template Markdown
  */

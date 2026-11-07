@@ -38,6 +38,10 @@ pnpm workflow:classify --kind commit --staged --json
 - **Exit code 1 means it could not decide** (`undecided: true`). Ask the user whether it is a `feat`, a `fix` or a `refactor` and re-run with `--type feature|bug|refactor`. Do not guess.
 - The scope is the team label. If the script reports several owners, the commit mixes teams' files: split it.
 
+## The team-instructor label
+
+`team-instructor` is reserved for the instructors (`.github/instructors.json`). The classifier refuses it as the commit scope, with an explanation, when the GitHub account is not on that list. **Do not work around it**: never pass `--actor`, never edit the list, never write the label by hand. Stop, tell the user which label you would use instead (their team's, or `platform`; for changes under `course/` from another team, also a line `Cross-team: <why>` in the issue) and continue with that.
+
 ## 3. Write the message
 
 - **Subject:** `type(scope): description`. The description is in the imperative mood ("add login page", not "added" or "adding"), starts lowercase, is at most 72 characters in total and has no trailing period.

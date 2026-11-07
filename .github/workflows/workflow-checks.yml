@@ -14,7 +14,7 @@ on:
 
 permissions:
   contents: read
-  # check:branch and check:ownership read the linked issue (open? same label? cross-team?).
+  # check:branch and check:ownership read the linked issue (open? same label? a "Cross-team:" line?).
   issues: read
 
 jobs:

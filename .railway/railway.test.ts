@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createRailwayContext, type ProjectDefinition, type ServiceNode } from "railway/iac";
 import { describe, expect, it } from "vitest";
-import program, { ENVIRONMENTS, type EnvironmentName, GAMES } from "./railway.ts";
+import program, { checkGame, ENVIRONMENTS, type EnvironmentName, GAMES, GATEWAY } from "./railway.ts";
 
 async function plan(environment: string): Promise<ServiceNode[]> {
   const definition: ProjectDefinition = await program(createRailwayContext({ environment }), (name, def) => ({
@@ -14,8 +14,35 @@ async function plan(environment: string): Promise<ServiceNode[]> {
 describe.each(Object.keys(ENVIRONMENTS) as EnvironmentName[])("railway.ts in %s", (environment) => {
   const { branch, appEnv } = ENVIRONMENTS[environment];
 
-  it("has one service per game", async () => {
-    expect((await plan(environment)).map((s) => s.name)).toEqual(GAMES.map((g) => g.service));
+  it("has the gateway and one service per game", async () => {
+    expect((await plan(environment)).map((s) => s.name)).toEqual([GATEWAY, ...GAMES.map((g) => g.service)]);
+  });
+
+  it("tells the gateway which games it serves and which are still planned", async () => {
+    const gateway = (await plan(environment)).find((s) => s.name === GATEWAY);
+    const list = (name: string) => {
+      const v = gateway?.variables?.[name];
+      return v && "value" in v ? String(v.value).split(",").filter(Boolean) : [];
+    };
+    expect(list("GAMES")).toEqual(GAMES.map((g) => g.service));
+    expect(list("PLANNED_GAMES")).toEqual(
+      ["team-1", "team-2", "team-3", "team-4"].filter((t) => !GAMES.some((g) => g.service === t)),
+    );
+  });
+
+  it("reaches every game on the port the games listen on", async () => {
+    const services = await plan(environment);
+    const port = services.find((s) => s.name !== GATEWAY)?.variables?.PORT;
+    expect(services.find((s) => s.name === GATEWAY)?.variables?.UPSTREAM_PORT).toEqual(port);
+  });
+
+  it("declares no custom domain on any service", async () => {
+    // Railway's generated domains are not part of this file, so the file cannot make a game private by
+    // itself: only the gateway is given a domain, by hand (see RAILWAY_SETUP.md). Games stay correct even
+    // if one is public, because the gateway passes X-Forwarded-For through untouched.
+    for (const s of await plan(environment)) {
+      expect(s.networking?.customDomains ?? {}).toEqual({});
+    }
   });
 
   it("deploys the right branch, and only after CI passed", async () => {
@@ -39,6 +66,19 @@ describe.each(Object.keys(ENVIRONMENTS) as EnvironmentName[])("railway.ts in %s"
 describe("railway.ts", () => {
   it("never deploys main to production", () => {
     expect(ENVIRONMENTS.production.branch).toBe("prod");
+  });
+
+  it("starts the gateway from its own folder and watches it", async () => {
+    const gateway = (await plan("production")).find((s) => s.name === GATEWAY);
+    expect(gateway?.deploy?.startCommand).toBe("node --import tsx server/gateway/server.ts");
+    expect(gateway?.build?.watchPatterns).toContain("/server/gateway/**");
+  });
+
+  it.each(["gateway", "health"])("refuses a game named %s: the gateway uses the name itself", (service) => {
+    expect(() => checkGame({ service, dir: "server/template", package: "@sdm/template" })).toThrow(
+      /reserved/,
+    );
+    expect(checkGame({ service: "team-2-x", dir: "server/template", package: "@sdm/template" })).toBeTruthy();
   });
 
   it("refuses an environment it doesn't manage", async () => {

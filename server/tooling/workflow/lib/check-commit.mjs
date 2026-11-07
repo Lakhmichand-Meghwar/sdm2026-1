@@ -4,12 +4,12 @@
 export const COMMIT_TYPES = ["feat", "fix", "docs", "refactor", "chore", "ci", "build", "test", "perf"];
 
 const SUBJECT = /^([a-z]+)(?:\(([a-z0-9][a-z0-9-]*)\))?(!)?: (\S.*)$/;
-const ISSUE_REFERENCE = /^(?:Refs|Closes|Fixes|Resolves) #\d+/im;
+export const ISSUE_REFERENCE = /^(?:Refs|Closes|Fixes|Resolves) #\d+/im;
 // Past tense and -ing forms that sneak in instead of the imperative ("added", "fixing", "updates").
 const NOT_IMPERATIVE =
   /^(?:added|fixed|updated|removed|changed|created|renamed|moved|adding|fixing|updating|removing|changing|creating|adds|fixes|updates|removes|changes|creates)\b/i;
 // Messages git or a tool generates; they cannot follow the format.
-const EXEMPT = /^(?:Merge |Revert "|fixup! |squash! |amend! )/;
+export const EXEMPT = /^(?:Merge |Revert "|fixup! |squash! |amend! )/;
 
 /**
  * Checks a Conventional-Commit subject line: "type(scope): description". Used for commit subjects

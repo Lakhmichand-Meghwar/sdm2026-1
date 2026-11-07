@@ -97,6 +97,15 @@ describe("work PRs", () => {
     expect(check({ title: "feat(frontend): add login" }).problems[0].message).toContain("not a team label");
   });
 
+  it("accepts the old [label] title only with allowLegacyTitle", () => {
+    expect(rules(check({ title: "[team-2] Add login" }))).toContain("title");
+    expect(check({ title: "[team-2] Add login", allowLegacyTitle: true }).problems).toEqual([]);
+    expect(check({ title: "[frontend] Add login", allowLegacyTitle: true }).problems[0].message).toContain(
+      "not a team label",
+    );
+    expect(check({ title: "feat(team-2): add login", allowLegacyTitle: true }).problems).toEqual([]);
+  });
+
   it("applies the commit subject rules to the title", () => {
     const message = (title: string) =>
       check({ title })
