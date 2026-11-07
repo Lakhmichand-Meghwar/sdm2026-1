@@ -61,7 +61,8 @@ const ITEM_RULES = [
   { item: /reference the issue|Refs #N/i, rules: ["commit-refs"] },
   { item: /\btitle\b/i, rules: ["title"] },
   { item: /branch is named/i, rules: ["branch"] },
-  { item: /base branch/i, rules: ["base"] },
+  // Only "The base branch is correct": "up to date with its base branch" says nothing about the base.
+  { item: /base branch is correct/i, rules: ["base"] },
   { item: /same team label/i, rules: ["labels", "issue-label"] },
 ];
 
@@ -241,6 +242,7 @@ export function auditPr({ pr, commits, commitsTruncated = false, issue, config, 
     problems,
     legacy,
     accepted,
+    excepted,
     warnings,
   };
 }
@@ -309,6 +311,16 @@ export function formatReport(groups, meta) {
       lines.push("", "Legacy, not counted (rules introduced after the PR was opened):");
       for (const r of withLegacy.sort((a, b) => b.number - a.number))
         lines.push(`- #${r.number}: ${[...new Set(r.legacy.map((p) => p.rule))].join(", ")}`);
+    }
+    // Failing PRs already show their exceptions as warnings; passing ones would otherwise hide them.
+    const withExceptions = g.passing.filter((r) => r.excepted?.length);
+    if (!meta.failingOnly && withExceptions.length > 0) {
+      lines.push("", 'Passing with an "Exception:" note (check the reason):');
+      for (const r of withExceptions.sort((a, b) => b.number - a.number)) {
+        const rules = [...new Set((r.accepted ?? []).map((p) => p.rule))];
+        const items = r.excepted.map((t) => `"${t.slice(0, 60)}"`).join(", ");
+        lines.push(`- #${r.number}: ${items}${rules.length ? ` (accepts ${rules.join(", ")})` : ""}`);
+      }
     }
   }
   return `${lines.join("\n")}\n`;

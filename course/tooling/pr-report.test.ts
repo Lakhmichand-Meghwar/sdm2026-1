@@ -291,6 +291,45 @@ describe("Exception notes (#183)", () => {
     expect(r.problems[0].message).toMatch(/^1 checklist item/);
   });
 
+  it("does not excuse a wrong base branch with an Exception on the up-to-date item", () => {
+    const upToDate = "The branch is up to date with its base branch";
+    const u = uncheckedItems(withException(upToDate, "  Exception: couldn't merge main in yet."));
+    expect(u.excepted).toEqual([upToDate]);
+    expect([...u.exceptedRules]).toEqual([]);
+    const r = audit({ pr: { ...pr, base: "main", body: withException(upToDate) } });
+    expect(r.problems.map((p) => p.rule)).toContain("base");
+    expect(r.accepted).toEqual([]);
+  });
+
+  it("accepts the base rule with an Exception on the base-branch item", () => {
+    const item = body().match(/- \[x\] (The base branch is correct[^\n]*)/)?.[1] ?? "";
+    expect(item).not.toBe("");
+    expect([...uncheckedItems(withException(item)).exceptedRules]).toEqual(["base"]);
+  });
+
+  it("lists passing PRs with an Exception in the Markdown report", () => {
+    const r = audit({
+      pr: { ...pr, number: 91, body: withException(commitsItem) },
+      commits: [...good, { message: "feat(team-2): add logout (Refs #12)" }],
+    });
+    const md = formatReport(groupByTeam([r], config.teamLabels), {
+      repo: "o/r",
+      state: "all",
+      generatedAt: "now",
+    });
+    expect(md).toContain("Passing: #91");
+    expect(md).toMatch(
+      /Passing with an "Exception:" note[^\n]*\n- #91: "Commits follow .*\(accepts commit-refs\)/,
+    );
+    const failingOnly = formatReport(groupByTeam([r], config.teamLabels), {
+      repo: "o/r",
+      state: "all",
+      generatedAt: "now",
+      failingOnly: true,
+    });
+    expect(failingOnly).not.toContain("Exception");
+  });
+
   it("does not take an empty Exception or a ticked item as a note", () => {
     expect(uncheckedItems(withException(commitsItem, "  Exception:")).open).toBe(1);
     expect(uncheckedItems(withException(commitsItem, "- [x] Exception: x")).open).toBe(1);

@@ -108,7 +108,7 @@ A problem against a rule from after the PR was opened is listed as *legacy*: sho
   Exception: the first two commits were pushed before the review and are kept, as the reviewers asked.
 ```
 
-The report accepts that item, and also the automatic check behind it (here `Refs #N` in the commits; likewise for the title, branch name, base branch and team label items). It lists the exception as a warning, so the reviewer and the evaluation can still see it.
+The report accepts that item, and also the automatic check behind it (here `Refs #N` in the commits; likewise for the title, branch name, "base branch is correct" and team label items). It still shows the exception, so the reviewer and the evaluation can see it: as a warning on a failing PR, and in the *Passing with an "Exception:" note* block for a PR that passes. "The branch is up to date with its base branch" covers no automatic check: an exception there does not excuse a wrong base branch.
 
 **During the hackathon:** run `node course/tooling/pr-report.mjs --state open --failing` now and then, and fix what it lists (edit the PR description, add the label, retarget the base branch). Commits that are already pushed don't have to be rewritten; reference the issue in the next ones.
 
