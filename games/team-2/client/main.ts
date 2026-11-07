@@ -12,6 +12,7 @@ import { cabinetOpened, playCabinet } from "./cabinet.ts";
 import { canvasSlashed, playCanvasSlash } from "./canvas.ts";
 import { playDrawer } from "./drawer.ts";
 import { playFootsteps, unlockAudio, walkers } from "./footsteps.ts";
+import { ghostPresent, setGhostPresence } from "./ghost.ts";
 import { knifeTaken, playKnife } from "./knife.ts";
 import "./style.css";
 
@@ -212,6 +213,7 @@ function render(state: EscapeSnapshot) {
   if (cabinetOpened(snapshot, state)) playCabinet();
   if (knifeTaken(snapshot, state)) playKnife();
   if (canvasSlashed(snapshot, state)) playCanvasSlash();
+  setGhostPresence(ghostPresent(state));
   snapshot = state;
   const encounter = state.ghostSeconds !== null;
   const active = state.phase === "running";
@@ -253,6 +255,7 @@ async function connect(id?: string) {
     connected.onLeave(() => {
       room = undefined;
       snapshot = undefined;
+      setGhostPresence(false);
       holding = false;
       if (inspection.open) inspection.close();
       game.hidden = true;
