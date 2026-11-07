@@ -50,6 +50,14 @@
       "owner": "platform"
     },
     {
+      "path": ".railway/**",
+      "owner": "platform"
+    },
+    {
+      "path": ".claude/**",
+      "owner": "platform"
+    },
+    {
       "path": "**",
       "owner": "shared"
     }

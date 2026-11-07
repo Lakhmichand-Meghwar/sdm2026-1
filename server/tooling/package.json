@@ -8,5 +8,8 @@
     "ownership.json",
     "check-node.mjs",
     "check-setup.mjs"
-  ]
+  ],
+  "devDependencies": {
+    "zod": "4.6.7"
+  }
 }

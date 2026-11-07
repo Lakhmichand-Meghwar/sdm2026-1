@@ -1,14 +1,15 @@
 /**
  * Contract for the template game: room state, input and config.
- * The server room (room/) and the client (client/) both import this.
+ * The server room (room/) and the client (client/) both import this, so it must stay browser-safe.
  * Change it only through a PR reviewed by both the server and client owners.
  */
 import { type SchemaType, schema, t } from "@colyseus/schema";
+import { BaseState, RoomSettingsSchema } from "@sdm/core/sim";
 import { z } from "zod";
 
 export const GAME_ID = "template";
 
-/** Synced player. Positions are in arena units, not pixels. */
+/** Synced player. Positions are in arena units, not pixels. Seat state lives in `state.seats`. */
 export const Player = schema(
   {
     name: t.string().default(""),
@@ -16,9 +17,6 @@ export const Player = schema(
     x: t.number().default(0),
     y: t.number().default(0),
     score: t.uint16().default(0),
-    connected: t.boolean().default(true),
-    /** Last input seq the server applied for this player; the client reconciles against it. */
-    lastSeq: t.uint32().default(0),
   },
   "Player",
 );
@@ -27,12 +25,9 @@ export type Player = SchemaType<typeof Player>;
 export const Pickup = schema({ x: t.number().default(0), y: t.number().default(0) }, "Pickup");
 export type Pickup = SchemaType<typeof Pickup>;
 
-export const SampleState = schema(
+/** Extends BaseState (tick, code, paused, seats). */
+export const SampleState = BaseState.extend(
   {
-    tick: t.uint32().default(0),
-    /** Room code players type to join, e.g. "QXTR". */
-    code: t.string().default(""),
-    paused: t.boolean().default(false),
     /** Keyed by sessionId. */
     players: t.map(Player),
     /** Keyed by pickup id. */
@@ -49,11 +44,18 @@ export const SampleInputSchema = z.object({
 });
 export type SampleInput = z.infer<typeof SampleInputSchema>;
 
-/** Tuning values loaded from config/game.json. Designers edit the JSON, not code. */
-export const SampleConfigSchema = z.object({
-  version: z.string(),
-  tickRate: z.number().int().min(10).max(120),
-  maxPlayers: z.number().int().min(1).max(16),
+/** What a client passes when it creates or joins a room. */
+export const SampleJoinOptionsSchema = z.object({
+  name: z.string().trim().min(1).max(24).default("player"),
+  /** Hex colour; empty picks one from the palette by seat order. */
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+});
+
+/** Room settings plus tuning values, loaded from config/game.json. Designers edit the JSON, not code. */
+export const SampleConfigSchema = RoomSettingsSchema.extend({
   arena: z.object({ width: z.number().positive(), height: z.number().positive() }),
   player: z.object({
     speed: z.number().positive().describe("Arena units per second"),

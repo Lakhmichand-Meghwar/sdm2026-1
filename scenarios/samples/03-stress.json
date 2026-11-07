@@ -1,0 +1,13 @@
+{
+  "id": "scenario-03",
+  "name": "Spawn Stress Test",
+  "description": "Multiple players spawned in a tight cluster",
+  "seed": 42,
+  "players": [
+    { "id": "bot1", "x": 0, "y": 0, "role": "guest" },
+    { "id": "bot2", "x": 1, "y": 0, "role": "guest" },
+    { "id": "bot3", "x": 0, "y": 1, "role": "guest" },
+    { "id": "bot4", "x": 1, "y": 1, "role": "guest" },
+    { "id": "bot5", "x": 2, "y": 2, "role": "guest" }
+  ]
+}

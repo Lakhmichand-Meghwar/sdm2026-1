@@ -1,0 +1,10 @@
+{
+  "id": "scenario-02",
+  "name": "Interaction Test",
+  "description": "Players spawned close together to test proximity chat or trading",
+  "seed": 999,
+  "players": [
+    { "id": "trader1", "x": 5, "y": 5, "role": "admin" },
+    { "id": "trader2", "x": 6, "y": 5, "role": "guest" }
+  ]
+}
