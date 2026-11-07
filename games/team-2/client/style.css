@@ -1,0 +1,475 @@
+@import "tailwindcss";
+
+:root {
+  font-family: system-ui, sans-serif;
+  color-scheme: dark;
+  color: #e9ddd7;
+  background: #100d10;
+}
+
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(ellipse at top, #3b2025, transparent 65%);
+}
+
+header {
+  border-bottom: 1px solid #6e4146;
+  margin-bottom: 1.5rem;
+}
+h1 {
+  font:
+    700 clamp(3.4rem, 12vw, 7rem) / 0.9 Georgia,
+    serif;
+  margin: 0;
+}
+h2,
+legend {
+  font:
+    700 1.15rem Georgia,
+    serif;
+  margin: 0 0 0.65rem;
+}
+p {
+  line-height: 1.5;
+}
+.eyebrow,
+button span,
+#round {
+  color: #e5a9a4;
+  font: 0.8rem monospace;
+  letter-spacing: 0.08em;
+}
+.eyebrow {
+  text-transform: uppercase;
+}
+
+.panel {
+  border: 1px solid #6e4146;
+  border-radius: 0.25rem;
+  background: #1b1318;
+  padding: 1rem;
+  margin: 0 0 1rem;
+}
+
+label {
+  display: block;
+  font-size: 0.9rem;
+  margin: 0.55rem 0;
+}
+input,
+button {
+  font: inherit;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #9d6566;
+  border-radius: 0.2rem;
+  color: inherit;
+  background: #241820;
+}
+input {
+  min-width: 0;
+  width: 100%;
+}
+button {
+  cursor: pointer;
+  background: #4b252d;
+}
+button:hover:not(:disabled) {
+  background: #69343e;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+:focus-visible {
+  outline: 2px solid #b9caff;
+  outline-offset: 3px;
+}
+
+.inline,
+.instruments {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.instruments {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.instruments input {
+  display: block;
+  margin-top: 0.25rem;
+}
+#timer {
+  color: #f6b0aa;
+  font: 700 2.75rem monospace;
+}
+[data-danger="true"] #timer {
+  color: #ff7878;
+  text-shadow: 0 0 1rem #e8303e;
+}
+[data-phase="escaped"] #timer {
+  color: #b7ddaf;
+}
+
+#notebook {
+  list-style: disc;
+  padding-left: 1.3rem;
+}
+#notebook li {
+  margin-bottom: 0.35rem;
+}
+.transmission {
+  border-left: 4px solid #c78079;
+}
+
+.scene {
+  aspect-ratio: 3 / 2;
+  background: #090c14;
+  isolation: isolate;
+}
+
+.scene-map {
+  position: absolute;
+  inset: 0;
+  background: url("./ward.jpg") center / 100% 100%;
+  transform: scale(1.17);
+  transform-origin: left 38%;
+  transition:
+    transform 280ms ease,
+    transform-origin 280ms ease;
+}
+
+.scene[data-view="security"] .scene-map {
+  transform-origin: right 38%;
+}
+
+.station {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  min-height: 2rem;
+  padding: 0.25rem 0.45rem;
+  font-size: clamp(0.64rem, 1.3vw, 0.92rem);
+  white-space: nowrap;
+  background: #0b101be8;
+  border-color: #82929e;
+}
+
+.station[data-selected="true"],
+.station:hover:not(:disabled),
+[aria-pressed="true"] {
+  border-color: #a6edf4;
+  background: #193849;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0 0.25em;
+  color: #b2edf5;
+  border: 1px solid #647e8b;
+  border-radius: 0.2em;
+  font-family: monospace;
+}
+
+[data-target="note"] {
+  --x: 33%;
+  --y: 47%;
+}
+[data-target="painting"] {
+  --x: 33%;
+  --y: 28%;
+}
+[data-target="cabinet"] {
+  --x: 54%;
+  --y: 35%;
+}
+[data-target="photo"] {
+  --x: 68%;
+  --y: 28%;
+}
+[data-target="terminal"] {
+  --x: 68%;
+  --y: 45%;
+}
+[data-target="exit"] {
+  --x: 83%;
+  --y: 50%;
+}
+
+.patient {
+  --x: 47%;
+  --y: 72%;
+  --scrubs: #5abecf;
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-55%, -100%);
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  color: var(--scrubs);
+  filter: drop-shadow(0 0.2rem 0.15rem #000);
+  transition:
+    left 260ms ease,
+    top 260ms ease;
+}
+
+.patient[hidden] {
+  display: none;
+}
+
+#patient-2 {
+  --scrubs: #ffb876;
+  transform: translate(20%, -90%);
+}
+
+#patient-2[data-station="spawn"] {
+  --x: 53%;
+}
+
+.patient span {
+  font: 700 0.75rem monospace;
+  background: #0b101be8;
+  padding: 0.15rem 0.3rem;
+  border-radius: 0.2rem;
+}
+
+.patient[data-local="true"] span::after {
+  content: " · YOU";
+}
+.patient[data-station="note"] {
+  --x: 35%;
+  --y: 65%;
+}
+.patient[data-station="painting"] {
+  --x: 42%;
+  --y: 60%;
+}
+.patient[data-station="cabinet"] {
+  --x: 55%;
+  --y: 57%;
+}
+.patient[data-station="photo"] {
+  --x: 63%;
+  --y: 59%;
+}
+.patient[data-station="terminal"] {
+  --x: 69%;
+  --y: 65%;
+}
+.patient[data-station="exit"] {
+  --x: 82%;
+  --y: 65%;
+}
+
+.patient i {
+  display: block;
+  position: relative;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin-top: 0.65rem;
+  margin-bottom: 0.3rem;
+  background: var(--scrubs);
+  border: 2px solid #101420;
+  box-shadow:
+    -0.24rem 0.55rem 0 -0.23rem #d0c5bb,
+    0.24rem 0.55rem 0 -0.23rem #d0c5bb;
+}
+
+.patient i::before {
+  content: "";
+  position: absolute;
+  inset: -0.75rem 0.05rem auto;
+  height: 0.7rem;
+  background: #dcb099;
+  border: 2px solid #101420;
+  border-top: 0.22rem solid #42313b;
+}
+
+.inspection {
+  margin: auto;
+  width: min(30rem, calc(100% - 2rem));
+  padding: 1rem;
+  border: 1px solid #bd8180;
+  border-radius: 0.6rem;
+  background: #221a21;
+}
+
+.inspection::backdrop {
+  background: #08090dd6;
+}
+
+.evidence {
+  margin-top: 0.8rem;
+  padding: 1.4rem;
+  border: 4px double #72574e;
+  background: #ebd5aa;
+  color: #322525;
+  font:
+    700 1.1rem / 1.55 Georgia,
+    serif;
+  box-shadow: inset 0 0 2rem #8d59434a;
+}
+
+.evidence[data-kind="note"] {
+  color: #163e72;
+}
+
+.evidence[data-kind="photo"]::before {
+  content: "";
+  display: block;
+  aspect-ratio: 1.5;
+  margin-bottom: 0.8rem;
+  border: 0.3rem solid #45382d;
+  background: url("./ward.jpg") 71% 26% / 800% 800%;
+}
+
+#game[data-phase="failed"] .scene-map {
+  filter: grayscale(0.9) brightness(0.55);
+}
+#game[data-phase="failed"] #timer {
+  color: #ff7878;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-map,
+  .patient {
+    transition: none;
+  }
+}
+
+#ward-app {
+  min-height: 100dvh;
+  background: #100d10;
+}
+
+#ward-app:fullscreen {
+  overflow: auto;
+}
+
+#ward-app:has(#game:not([hidden])) header {
+  display: none;
+}
+
+#lobby {
+  max-width: 36rem;
+}
+
+.scene {
+  width: min(100%, 112dvh);
+  margin-inline: auto;
+}
+
+.controls {
+  padding-block: 0.5rem;
+}
+
+[data-target="note"] {
+  border-color: #ffd58a;
+  box-shadow: 0 0 1rem #ffbe6666;
+}
+
+[data-target="desk"] {
+  --x: 34%;
+  --y: 56%;
+}
+
+.patient[data-station="desk"] {
+  --x: 38%;
+  --y: 69%;
+}
+
+.inventory-drawer {
+  position: fixed;
+  z-index: 5;
+  inset: 0 0 0 auto;
+  width: min(23rem, 100vw);
+  margin: 0;
+  overflow: auto;
+  box-shadow: -1rem 0 3rem #0009;
+}
+
+#drawer li {
+  margin-block: 0.5rem;
+}
+
+#collect,
+#inspect-inventory,
+#lock {
+  margin-top: 0.75rem;
+}
+
+.evidence[data-kind="note"] {
+  color: #27190f;
+  background: radial-gradient(ellipse at 44% 40%, #f6deb1 25%, #c79355 66%, #322017 98%);
+  border-color: #472615;
+  transform: rotate(-1deg);
+}
+
+.evidence[data-kind="desk"] {
+  border-color: #734b39;
+  background: #261b1a;
+  color: #f5dfcb;
+  box-shadow: inset 0 0 1.5rem #000;
+}
+
+.evidence[data-kind="desk"][data-pickup="knife"]::before {
+  content: "";
+  display: block;
+  width: 7rem;
+  height: 1.25rem;
+  margin: 0.5rem auto 1rem;
+  background: linear-gradient(90deg, #75513e 33%, #e1e8e8 34%, #909da1);
+  clip-path: polygon(0 20%, 35% 20%, 35% 0, 100% 0, 86% 65%, 35% 65%, 35% 85%, 0 85%);
+}
+
+.ghost-overlay {
+  position: fixed;
+  z-index: 6;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 0.65rem;
+  padding: 1rem;
+  text-align: center;
+  background: radial-gradient(ellipse, #261736e8, #06070bf7);
+}
+
+.ghost-overlay[hidden] {
+  display: none;
+}
+
+.ghost-face {
+  width: 6rem;
+  height: 8rem;
+  border-radius: 50% 50% 40% 40%;
+  background:
+    radial-gradient(ellipse at 35% 38%, #171122 0 8%, transparent 10%),
+    radial-gradient(ellipse at 65% 38%, #171122 0 8%, transparent 10%),
+    radial-gradient(ellipse at 50% 67%, #171122 0 10%, transparent 12%),
+    radial-gradient(ellipse at 50% 35%, #d7cded, #8f79b6 55%, transparent 76%);
+  filter: drop-shadow(0 0 1.5rem #b49aeb);
+}
+
+.ghost-overlay progress {
+  display: block;
+  width: min(8rem, 33vw);
+  accent-color: #b49aeb;
+}
+
+#hold-ghost {
+  touch-action: none;
+  user-select: none;
+}

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#100d10" />
+    <title>Ward 04 | Time Loop Escape</title>
+  </head>
+  <body>
+    <main id="ward-app" class="p-3 sm:p-5">
+      <header>
+        <p class="eyebrow">Patient transfer record / 04</p>
+        <h1>Ward 04</h1>
+        <p>Two patients. Three minutes. One way out.</p>
+      </header>
+
+      <form id="lobby" class="panel">
+        <h2>Admission</h2>
+        <p>Create a room and share its code with the other player, or enter their code below.</p>
+        <button id="create" type="button">Create room</button>
+        <label for="code">Room code</label>
+        <div class="inline">
+          <input id="code" required autocomplete="off" maxlength="64" spellcheck="false" />
+          <button id="join" type="submit">Join room</button>
+        </div>
+      </form>
+
+      <p id="status" role="status" class="panel transmission">Waiting for admission.</p>
+
+      <section id="game" hidden>
+        <div class="panel instruments">
+          <div><div id="timer" role="timer" aria-label="Time remaining">03:00</div><div id="round"></div></div>
+          <label>Share this room code <input id="room-code" readonly /></label>
+        </div>
+
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div class="flex flex-wrap gap-2">
+            <button id="ward-view" type="button" aria-pressed="true">01 / Patient ward</button>
+            <button id="security-view" type="button" aria-pressed="false">02 / Security</button>
+          </div>
+          <button id="drawer-toggle" type="button" aria-expanded="false" aria-controls="drawer">Inventory &amp; clues</button>
+          <button id="fullscreen" type="button">Full screen</button>
+          <button id="restart" type="button" hidden>Restart together</button>
+        </div>
+        <div id="scene" class="scene relative overflow-hidden rounded-xl border border-rose-950" data-view="ward">
+          <div class="scene-map">
+            <fieldset id="room-actions" class="absolute inset-0 m-0 border-0 p-0" aria-label="Inspect the hospital" disabled>
+              <button type="button" data-target="note" data-area="ward" class="station"><kbd>1</kbd> Burnt paper</button>
+              <button type="button" data-target="painting" data-area="ward" class="station"><kbd>2</kbd> Blue painting</button>
+              <button type="button" data-target="cabinet" data-area="ward" class="station"><kbd>3</kbd> Medicine cabinet</button>
+              <button type="button" data-target="photo" data-area="security" class="station"><kbd>4</kbd> Staff photograph</button>
+              <button type="button" data-target="desk" data-area="ward" class="station"><kbd>5</kbd> Desk drawer</button>
+              <button type="button" data-target="exit" data-area="security" class="station"><kbd>6</kbd> Exit lock</button>
+            </fieldset>
+            <div id="patients" class="pointer-events-none absolute inset-0" aria-hidden="true">
+              <div id="patient-1" class="patient" hidden><span>P1</span><i></i></div>
+              <div id="patient-2" class="patient" hidden><span>P2</span><i></i></div>
+            </div>
+          </div>
+        </div>
+        <p class="controls text-sm text-rose-200">Press 1?6 to move, E to inspect, or click an object. Open the inventory to use items.</p>
+        <dialog id="inspection" aria-labelledby="inspection-title" class="inspection">
+          <div class="flex items-center justify-between gap-4">
+            <h2 id="inspection-title">Inspect clue</h2>
+            <form method="dialog"><button id="close-inspection" type="submit" aria-label="Close inspection">Close</button></form>
+          </div>
+          <div id="evidence" class="evidence"><p id="inspection-text"></p></div>
+          <button id="collect" type="button" hidden></button>
+          <button id="inspect-inventory" type="button" hidden>Open inventory</button>
+          <form id="lock" hidden>
+            <label id="lock-label" for="lock-code">Four-digit code</label>
+            <div class="inline">
+              <input id="lock-code" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autocomplete="off" />
+              <button type="submit">Try lock</button>
+            </div>
+            <p id="lock-feedback" aria-live="polite"></p>
+          </form>
+          <button id="flip-photo" class="mt-3" type="button" hidden>Turn photograph over</button>
+        </dialog>
+
+        <aside id="drawer" class="panel inventory-drawer" aria-label="Shared inventory and clues" hidden>
+          <div class="flex items-center justify-between gap-3">
+            <h2>Shared inventory</h2>
+            <button id="close-drawer" type="button">Close</button>
+          </div>
+          <p>Click an item to use it at your current station.</p>
+          <ul id="inventory"></ul>
+          <h2 class="mt-4">Clues</h2>
+          <ul id="notebook"></ul>
+        </aside>
+        <div id="ghost" class="ghost-overlay" hidden>
+          <div class="ghost-face" aria-hidden="true"></div>
+          <h2>The ghost is here</h2>
+          <p>Both players: hold E for five seconds.</p>
+          <p id="ghost-clock"></p>
+          <div class="flex gap-4">
+            <label>Player 1 <progress id="resist-1" max="5" value="0"></progress></label>
+            <label>Player 2 <progress id="resist-2" max="5" value="0"></progress></label>
+          </div>
+          <button id="hold-ghost" type="button">Hold to resist</button>
+        </div>
+      </section>
+
+
+    </main>
+    <script type="module" src="/client/main.ts"></script>
+  </body>
+</html>
