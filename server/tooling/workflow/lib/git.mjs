@@ -2,12 +2,20 @@
 // macOS, Windows and Linux.
 import { execFileSync } from "node:child_process";
 
+/** Up to 256 MB of output: the default 1 MB is too small for the diff of a big sync or promotion PR. */
+const MAX_OUTPUT = 1 << 28;
+
 /**
  * @param {string} root
  * @param {string[]} args
  */
 export function git(root, args) {
-  return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  return execFileSync("git", args, {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    maxBuffer: MAX_OUTPUT,
+  });
 }
 
 /**

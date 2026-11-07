@@ -125,26 +125,35 @@ const issues = paginate(
 }));
 
 // PR documentation: the same rules as the PR documentation report.
-const prReport = JSON.parse(
-  run(
-    process.execPath,
-    [fileURLToPath(new URL("pr-report.mjs", import.meta.url)), "--state", "all", "--json", "--repo", repo],
-    "run pr-report.mjs",
-  ),
+const prReportOutput = run(
+  process.execPath,
+  [fileURLToPath(new URL("pr-report.mjs", import.meta.url)), "--state", "all", "--json", "--repo", repo],
+  "run pr-report.mjs",
 );
+let prReport;
+try {
+  prReport = JSON.parse(prReportOutput);
+} catch (err) {
+  console.error(
+    `error: pr-report.mjs --json did not print valid JSON (${prReportOutput.length} characters, truncated?): ${err.message}`,
+  );
+  process.exit(EXIT.environment);
+}
 const docs = new Map();
 for (const team of prReport.teams) {
   for (const p of team.passing ?? []) docs.set(p.number, { ok: true, rules: [] });
   for (const p of team.failing ?? []) docs.set(p.number, { ok: false, rules: p.problems.map((x) => x.rule) });
 }
 
-const members = JSON.parse(
-  run(
-    "gh",
-    ["api", `repos/${repo}/assignees`, "--paginate", "--jq", "[.[].login]"],
-    "list collaborators",
-  ).replace(/\]\s*\[/g, ","),
-);
+// One login per line: stitching per-page JSON arrays together breaks on an empty page.
+const members = run(
+  "gh",
+  ["api", `repos/${repo}/assignees`, "--paginate", "--jq", ".[].login"],
+  "list collaborators",
+)
+  .split(/\r?\n/)
+  .map((l) => l.trim())
+  .filter(Boolean);
 const rows = scoreAll(collectStats({ prs, issues, docs, teamLabels: config.teamLabels, members }));
 
 if (flags.json === true) {
@@ -155,4 +164,5 @@ if (flags.json === true) {
     formatStudentReport(rows, { repo, generatedAt, prCount: prs.length, issueCount: issues.length }),
   );
 }
-process.exit(EXIT.ok);
+// exitCode, not process.exit(): on macOS and Linux stdout to a pipe is asynchronous, and exit() would cut it off.
+process.exitCode = EXIT.ok;
