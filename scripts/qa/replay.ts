@@ -8,7 +8,7 @@ export class ReplayManager {
       const data = readFileSync(path, "utf-8");
       console.log(`[replay] Loaded replay: ${filename}`);
       return JSON.parse(data) as Record<string, unknown>;
-    } catch (error) {
+    } catch (_error) {
       console.error(`[replay] Failed to load replay: ${filename}`);
       return null;
     }
