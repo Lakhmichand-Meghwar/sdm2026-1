@@ -9,7 +9,7 @@ import { CLUE_IDS, CODE_KINDS, LEVEL_COUNT, TARGETS } from "./rules.ts";
 
 export const GAME_ID = "time-loop-escape";
 
-export type Phase = "waiting" | "briefing" | "playing" | "resetting" | "won";
+export type Phase = "waiting" | "briefing" | "playing" | "resetting" | "won" | "ended";
 
 /** A detective. `slot` is 1 or 2 and decides which half of a shared puzzle they own. */
 export const Player = schema(
@@ -67,6 +67,15 @@ export const TimeLoopState = BaseState.extend(
     clues2: t.array("string"),
     events: t.array(GameEvent),
     eventSeq: t.uint32().default(0),
+    /** A detective paused the game: the clock stops and the room ignores actions until someone resumes. */
+    held: t.boolean().default(false),
+    /** Who paused the game: their name, and their slot so each screen can tell "you" from the partner. */
+    heldBy: t.string().default(""),
+    heldSlot: t.uint8().default(0),
+    /** Phase "ended": who ended the game early, and where, for the Game ended screen. */
+    endedBy: t.string().default(""),
+    endedSlot: t.uint8().default(0),
+    endedAt: t.string().default(""),
 
     // Room 1 · the office
     paintClicks: t.uint8().default(0),
@@ -99,6 +108,9 @@ export const TimeLoopInputSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("share"), clue: z.enum(CLUE_IDS) }),
   z.object({ type: z.literal("ready") }),
   z.object({ type: z.literal("restart") }),
+  z.object({ type: z.literal("pause") }),
+  z.object({ type: z.literal("resume") }),
+  z.object({ type: z.literal("end") }),
 ]);
 export type TimeLoopInput = z.infer<typeof TimeLoopInputSchema>;
 

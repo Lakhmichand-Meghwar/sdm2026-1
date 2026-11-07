@@ -617,3 +617,142 @@ describe("a Play alone room after somebody joined and left", () => {
     expect(room.state.timeLeft).toBe(before);
   });
 });
+
+describe("pausing", () => {
+  it("stops the clock and remembers who paused, then carries on from the same second", () => {
+    const room = started();
+    room.tick(game.config.tickRate * 2);
+    room.act("a", { type: "pause" });
+    expect(room.state.held).toBe(true);
+    expect(room.state.heldBy).toBe("Ada");
+    expect(room.state.heldSlot).toBe(1);
+    const before = room.state.timeLeft;
+    room.tick(game.config.tickRate * 10);
+    expect(room.state.timeLeft).toBe(before);
+
+    room.act("a", { type: "resume" });
+    expect(room.state.held).toBe(false);
+    room.tick(game.config.tickRate);
+    expect(room.state.timeLeft).toBe(before - 1);
+  });
+
+  it("lets the other detective resume", () => {
+    const room = started();
+    room.act("a", { type: "pause" });
+    room.act("b", { type: "resume" });
+    expect(room.state.held).toBe(false);
+    expect(room.lastEvent()?.text).toBe("Bo resumed the game.");
+  });
+
+  it("ignores clicks, codes and shared clues while paused", () => {
+    const room = started();
+    room.tap("b", "note");
+    room.act("a", { type: "pause" });
+    room.tap("a", "painting");
+    room.share("b", "blue4");
+    room.code("b", "laptop", "1998");
+    expect(room.state.paintClicks).toBe(0);
+    expect(room.journal("a")).toEqual([]);
+    expect(room.state.laptopDone).toBe(false);
+
+    room.act("b", { type: "resume" });
+    room.tap("a", "painting");
+    expect(room.state.paintClicks).toBe(1);
+  });
+
+  it("can only pause while a room is being played", () => {
+    const room = joined();
+    expect(room.state.phase).toBe("briefing");
+    room.act("a", { type: "pause" });
+    expect(room.state.held).toBe(false);
+  });
+
+  it("forgets a pause when the next room starts", () => {
+    const room = started();
+    room.act("a", { type: "pause" });
+    room.sim.applyDebug("a", "level", ["2"]);
+    expect(room.state.phase).toBe("briefing");
+    expect(room.state.held).toBe(false);
+  });
+
+  it("stops the clock in a solo room too", () => {
+    const room = makeRoom();
+    room.sim.join("a", { name: "Ada", solo: true });
+    room.tick();
+    room.act("a", { type: "ready" });
+    room.act("a", { type: "pause" });
+    const before = room.state.timeLeft;
+    room.tick(game.config.tickRate * 5);
+    expect(room.state.timeLeft).toBe(before);
+  });
+});
+
+describe("ending a game early", () => {
+  it("ends the game for both detectives and says who ended it and where", () => {
+    const room = started();
+    room.act("b", { type: "end" });
+    expect(room.state.phase).toBe("ended");
+    expect(room.state.endedBy).toBe("Bo");
+    expect(room.state.endedSlot).toBe(2);
+    expect(room.state.endedAt).toBe("The Office, loop 1");
+    const left = room.state.timeLeft;
+    room.tick(game.config.tickRate * 5);
+    expect(room.state.timeLeft).toBe(left);
+    room.tap("a", "painting");
+    expect(room.state.paintClicks).toBe(0);
+  });
+
+  it("can be ended from a briefing, and from a paused game", () => {
+    const briefing = joined();
+    briefing.act("a", { type: "end" });
+    expect(briefing.state.phase).toBe("ended");
+
+    const paused = started();
+    paused.act("a", { type: "pause" });
+    paused.act("b", { type: "end" });
+    expect(paused.state.phase).toBe("ended");
+    expect(paused.state.held).toBe(false);
+  });
+
+  it("can't end a game that hasn't started", () => {
+    const room = makeRoom();
+    room.sim.join("a", { name: "Ada" });
+    room.tick();
+    room.act("a", { type: "end" });
+    expect(room.state.phase).toBe("waiting");
+  });
+
+  it("starts a fresh game in the same room on Play again", () => {
+    const room = started();
+    room.tap("b", "note");
+    room.act("a", { type: "end" });
+    room.act("b", { type: "restart" });
+    expect(room.state.phase).toBe("briefing");
+    expect(room.state.level).toBe(1);
+    expect(room.journal("b")).toEqual([]);
+    expect(room.state.endedBy).toBe("");
+    expect(room.state.endedSlot).toBe(0);
+  });
+
+  it("waits for a partner on Play again if the other detective went back to the lobby", () => {
+    const room = started();
+    room.act("a", { type: "end" });
+    room.sim.leave("b");
+    room.act("a", { type: "restart" });
+    expect(room.state.phase).toBe("waiting");
+    room.sim.join("c", { name: "Cy" });
+    room.tick();
+    expect(room.state.phase).toBe("briefing");
+  });
+
+  it("replays a paused and ended game to the same final state", () => {
+    const room = started();
+    room.act("a", { type: "pause" });
+    room.tick(game.config.tickRate * 3);
+    room.act("b", { type: "resume" });
+    room.tap("b", "note");
+    room.act("a", { type: "end" });
+    const replay = room.sim.snapshot();
+    expect(runReplay(game, replay).stateHash).toBe(replay.final?.stateHash);
+  });
+});
