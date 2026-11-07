@@ -24,11 +24,11 @@ function setText(id: string, text: string): void {
 
 // ── screens ──────────────────────────────────────────────────────────────────
 
-export type MainScreen = "start" | "intro" | "lobby" | "game" | "win";
-export type Overlay = "brief" | "wait" | "reset" | "lost";
+export type MainScreen = "start" | "intro" | "lobby" | "game" | "win" | "ended";
+export type Overlay = "brief" | "wait" | "reset" | "lost" | "paused";
 
-const MAIN_SCREENS: MainScreen[] = ["start", "intro", "lobby", "game", "win"];
-const OVERLAYS: Overlay[] = ["brief", "wait", "reset", "lost"];
+const MAIN_SCREENS: MainScreen[] = ["start", "intro", "lobby", "game", "win", "ended"];
+const OVERLAYS: Overlay[] = ["brief", "wait", "reset", "lost", "paused"];
 
 export function showMain(name: MainScreen): void {
   for (const screen of MAIN_SCREENS) setHidden(`screen-${screen}`, screen !== name);
@@ -37,6 +37,44 @@ export function showMain(name: MainScreen): void {
 /** Shows one overlay on top of the main screen, or none. */
 export function setOverlay(name: Overlay | null): void {
   for (const overlay of OVERLAYS) setHidden(`screen-${overlay}`, overlay !== name);
+}
+
+// ── pause and end game ───────────────────────────────────────────────────────
+
+/** The top bar's Pause and End game buttons: Pause only while a room is being played. */
+export function setGameControls(canPause: boolean, canEnd: boolean): void {
+  setHidden("btn-pause", !canPause);
+  setHidden("btn-end", !canEnd);
+}
+
+export function setPaused(by: string, isMe: boolean): void {
+  setText(
+    "paused-text",
+    isMe ? "You paused the game. The clock is stopped." : `${by} paused the game. The clock is stopped.`,
+  );
+}
+
+export function setEnded(by: string, isMe: boolean, where: string): void {
+  setText(
+    "ended-msg",
+    `${isMe ? "You" : by} ended the game in ${where}. Play again to start a new game in this room.`,
+  );
+}
+
+/** The End game confirmation is client-only, so it isn't an overlay that every state patch resets. */
+export function openConfirmEnd(solo: boolean): void {
+  setText(
+    "confirm-end-text",
+    solo
+      ? "Your clues and progress are lost."
+      : "The game ends for both of you. Your clues and progress are lost.",
+  );
+  setHidden("confirm-end", false);
+  el<HTMLButtonElement>("confirm-end-no").focus();
+}
+
+export function closeConfirmEnd(): void {
+  setHidden("confirm-end", true);
 }
 
 // ── intro and lobby ──────────────────────────────────────────────────────────

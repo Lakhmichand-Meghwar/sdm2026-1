@@ -141,10 +141,13 @@ export function render(state: TimeLoopState, sessionId: string): void {
   if (phase !== lastPhase) {
     if (phase === "resetting") ui.startParticles();
     if (phase !== "playing") ui.closeCodeModal();
+    if (phase === "won" || phase === "ended" || phase === "waiting") ui.closeConfirmEnd();
     lastPhase = phase;
   }
+  if (state.held) ui.closeCodeModal();
+  ui.setGameControls(phase === "playing" && !state.held, phase === "playing");
 
-  ui.showMain(phase === "won" ? "win" : "game");
+  ui.showMain(phase === "won" ? "win" : phase === "ended" ? "ended" : "game");
   switch (phase) {
     case "waiting":
       ui.setWait(state.code, state.code ? currentInviteLink(state.code) : "");
@@ -174,12 +177,20 @@ export function render(state: TimeLoopState, sessionId: string): void {
       ui.setWin(state.resets, state.finalTime);
       ui.setOverlay(null);
       break;
+    case "ended":
+      ui.setEnded(state.endedBy, state.endedSlot === me, state.endedAt);
+      ui.setOverlay(null);
+      break;
+    case "playing":
+      if (state.held) ui.setPaused(state.heldBy, state.heldSlot === me);
+      ui.setOverlay(state.held ? "paused" : null);
+      break;
     default:
       ui.setOverlay(null);
   }
 
   ui.setBanner(
-    phase === "playing" && !state.solo && partnerAway(state, sessionId)
+    phase === "playing" && !state.held && !state.solo && partnerAway(state, sessionId)
       ? "Your partner is away. The clock is paused until they are back."
       : null,
   );
