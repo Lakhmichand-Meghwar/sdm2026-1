@@ -60,6 +60,8 @@ export const TimeLoopState = BaseState.extend(
     solo: t.boolean().default(false),
     /** The room was made with Play alone, so it goes back to one player if the joiner leaves. */
     startedSolo: t.boolean().default(false),
+    /** Seconds per loop in the first room, chosen by whoever made the room. Later rooms get less. */
+    loopTime: t.uint16().default(0),
     /** Seconds left when the last door opened. */
     finalTime: t.uint16().default(0),
     /** Each detective's own journal: clue ids in the order found. Kept across loops and rooms. */
@@ -107,6 +109,8 @@ export const TimeLoopJoinOptionsSchema = z.object({
   name: z.string().trim().max(24).default(""),
   /** Play the whole game alone: one player can use everything. */
   solo: z.boolean().default(false),
+  /** Seconds per loop in the first room, picked in the lobby. Only the room's creator sets it. */
+  time: z.number().int().optional(),
 });
 
 /** Room settings plus tuning values, loaded from config/game.json. */
@@ -120,5 +124,22 @@ export const TimeLoopConfigSchema = RoomSettingsSchema.extend({
     )
     .length(LEVEL_COUNT),
   resetSeconds: z.number().positive().describe("How long the loop-reset screen lasts"),
-});
+  loopTimes: z
+    .array(z.number().int().positive())
+    .nonempty()
+    .describe("Loop times a room's creator can pick, in seconds for the first room"),
+  defaultLoopTime: z.number().int().positive().describe("Loop time when none (or an unknown one) is picked"),
+})
+  .refine((c) => c.loopTimes.includes(c.defaultLoopTime), {
+    message: "defaultLoopTime must be one of loopTimes",
+    path: ["defaultLoopTime"],
+  })
+  .refine(
+    (c) => {
+      // Later rooms keep their offset from the first room, so the shortest choice must leave every room some time.
+      const first = c.levels[0]?.duration ?? 0;
+      return c.levels.every((level) => level.duration - first + Math.min(...c.loopTimes) > 0);
+    },
+    { message: "the shortest loop time leaves a room with no time", path: ["loopTimes"] },
+  );
 export type TimeLoopConfig = z.infer<typeof TimeLoopConfigSchema>;
