@@ -11,7 +11,9 @@
 import { COMMIT_TYPES } from "../../../server/tooling/workflow/lib/check-commit.mjs";
 import { baseFor } from "../../../server/tooling/workflow/lib/rules.mjs";
 import { headingsOf, stripComments } from "../../../server/tooling/workflow/lib/template.mjs";
-import { auditPr, linkedIssue } from "./pr-report.mjs";
+import { auditPr, CONVENTIONAL_TITLES_SINCE, isLegacy, linkedIssue } from "./pr-report.mjs";
+
+export { CONVENTIONAL_TITLES_SINCE };
 
 export const COMMENT_MARKER = "<!-- pr-report:fix -->";
 const normalize = (s) => s.trim().toLowerCase();
@@ -67,9 +69,10 @@ const itemText = (line) => normalize(line.replace(/^\s*-\s*\[[ xX]\]\s*/, "").re
  *   issues: Map<number, { number: number, labels: string[] }>,
  *   config: { teamLabels: string[] },
  *   templates: Record<string, string>,
- * }} input
+ *   hadComment?: boolean,
+ * }} input hadComment: this tool already left a comment, which a passing open PR gets updated to "nothing left"
  */
-export function planFix({ pr, commits, issues, config, templates }) {
+export function planFix({ pr, commits, issues, config, templates, hadComment = false }) {
   const before = auditPr({ pr, commits, issue: issueFor(pr, issues), config, templates });
   /** @type {string[]} */
   const fixed = [];
@@ -107,12 +110,8 @@ export function planFix({ pr, commits, issues, config, templates }) {
   }
 
   const after = { ...pr, title, body, base, labels: [...pr.labels, ...addLabels] };
-  const audited = auditPr({ pr: after, commits, issue: issueFor(after, issues), config, templates });
-  // An old "[team-label] Summary" title was right when the PR was opened, so it is not a problem (#101).
-  const remaining = {
-    problems: audited.problems.filter((p) => !(p.rule === "title" && isOldStyleTitle(after, config))),
-  };
-  remaining.ok = remaining.problems.length === 0;
+  // Only current problems count; problems against rules from after the PR was opened are legacy.
+  const remaining = auditPr({ pr: after, commits, issue: issueFor(after, issues), config, templates });
   const notes = [];
   if (pr.state === "OPEN" && WORK_BRANCH.test(pr.base) && remaining.problems.some((p) => p.rule === "base"))
     notes.push(
@@ -132,9 +131,9 @@ export function planFix({ pr, commits, issues, config, templates }) {
     changes,
     fixed,
     remaining: remaining.problems,
-    // Open PRs hear about everything; merged and closed ones only about what was changed on them.
+    // Only open PRs get a comment: on a merged or closed PR the author can't change anything (#183).
     comment:
-      fixed.length === 0 && (remaining.ok || pr.state !== "OPEN")
+      pr.state !== "OPEN" || (fixed.length === 0 && remaining.ok && notes.length === 0 && !hadComment)
         ? null
         : commentFor(pr, fixed, remaining.problems, notes),
   };
@@ -144,18 +143,11 @@ export function planFix({ pr, commits, issues, config, templates }) {
 const sameText = (a, b) =>
   (a ?? "").replace(/\r\n/g, "\n").trimEnd() === (b ?? "").replace(/\r\n/g, "\n").trimEnd();
 
-/** PRs opened before #86 was merged use "[team-label] Summary" titles; later ones Conventional Commits. */
-export const CONVENTIONAL_TITLES_SINCE = "2026-11-06T14:29:27Z";
-const OLD_TITLE = /^\[([^\]]+)\]\s+\S/;
 const CONVENTIONAL_TITLE = /^([a-z]+)(?:\(([^)]*)\))?(!)?:\s*(.+)$/;
 
-/** @param {{ title: string, createdAt?: string | null }} pr */
-function isOldStyleTitle(pr, config) {
-  const m = OLD_TITLE.exec(pr.title.trim());
-  return Boolean(
-    m && config.teamLabels.includes(m[1]) && pr.createdAt && pr.createdAt < CONVENTIONAL_TITLES_SINCE,
-  );
-}
+/** A "[team-label] Summary" title on a PR opened before #86: right by the rule of its time. */
+const isOldStyleTitle = (pr, config) =>
+  /^\[[^\]]+\]\s+\S/.test(pr.title.trim()) && isLegacy({ rule: "title" }, pr, config.teamLabels);
 
 /**
  * The fixed title, or null when it can't be fixed without guessing.

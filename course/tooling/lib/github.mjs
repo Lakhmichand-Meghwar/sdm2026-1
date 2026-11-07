@@ -100,3 +100,23 @@ export function tempDir() {
   const dir = mkdtempSync(join(tmpdir(), "course-fix-"));
   return { dir, remove: () => rmSync(dir, { recursive: true, force: true }) };
 }
+
+/**
+ * Hides a comment as outdated (GitHub's "minimize"): it stays, and anyone can expand it.
+ * @param {string} root
+ * @param {string} nodeId the comment's GraphQL node id
+ */
+export function hideAsOutdated(root, nodeId) {
+  execFileSync(
+    "gh",
+    [
+      "api",
+      "graphql",
+      "-f",
+      "query=mutation($id: ID!) { minimizeComment(input: { subjectId: $id, classifier: OUTDATED }) { minimizedComment { isMinimized } } }",
+      "-f",
+      `id=${nodeId}`,
+    ],
+    { cwd: root, stdio: ["ignore", "ignore", "pipe"] },
+  );
+}

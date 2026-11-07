@@ -32,9 +32,10 @@ export function prefixTeam(title, teamLabels) {
  * @param {{
  *   issue: { number: number, title: string, url?: string, state: string, author: string, labels: string[] },
  *   config: { teamLabels: string[], types: Record<string, { githubLabel: string | null }> },
- * }} input
+ *   hadComment?: boolean,
+ * }} input hadComment: this tool already left a comment, which a passing open issue gets updated to "nothing left"
  */
-export function planIssueFix({ issue, config }) {
+export function planIssueFix({ issue, config, hadComment = false }) {
   const before = auditIssue({ issue, config });
   /** @type {string[]} */
   const fixed = [];
@@ -68,9 +69,9 @@ export function planIssueFix({ issue, config }) {
     changes,
     fixed,
     remaining: remaining.problems,
-    // Open issues hear about everything; closed ones only about what was changed on them.
+    // Only open issues get a comment: on a closed issue nobody acts on it (#183).
     comment:
-      fixed.length === 0 && (remaining.ok || issue.state !== "OPEN")
+      issue.state !== "OPEN" || (fixed.length === 0 && remaining.ok && !hadComment)
         ? null
         : issueCommentFor(fixed, remaining.problems),
   };
