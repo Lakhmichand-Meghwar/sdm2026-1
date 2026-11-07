@@ -1,0 +1,10 @@
+{
+  "id": "scenario-01",
+  "name": "Basic Spawn",
+  "description": "Two players spawn next to each other",
+  "seed": 12345,
+  "players": [
+    { "id": "player1", "x": 10, "y": 10, "role": "admin" },
+    { "id": "player2", "x": 12, "y": 10, "role": "guest" }
+  ]
+}

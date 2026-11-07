@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { generateRoomCode, ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from "../server/roomCodes.ts";
 import { buildInviteLink, normalizeRoomCode, readClientParams } from "./urlParams.ts";
 
 describe("normalizeRoomCode", () => {
@@ -11,6 +12,32 @@ describe("normalizeRoomCode", () => {
     expect(normalizeRoomCode("QXTRA")).toBeNull();
     expect(normalizeRoomCode("QX1R")).toBeNull();
     expect(normalizeRoomCode("")).toBeNull();
+  });
+
+  it("rejects I and O, which the server never puts in a code", () => {
+    expect(normalizeRoomCode("QOTR")).toBeNull();
+    expect(normalizeRoomCode("qitr")).toBeNull();
+    expect(readClientParams("?room=QOTR").room).toBeNull();
+  });
+
+  it("accepts every letter the server uses, and only those", () => {
+    for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+      const code = letter.repeat(ROOM_CODE_LENGTH);
+      const expected = ROOM_CODE_ALPHABET.includes(letter) ? code : null;
+      expect(normalizeRoomCode(code)).toBe(expected);
+    }
+  });
+
+  it("accepts codes the server generates", () => {
+    let seed = 1;
+    const random = (): number => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let i = 0; i < 200; i++) {
+      const code = generateRoomCode(() => false, random);
+      expect(normalizeRoomCode(code)).toBe(code);
+    }
   });
 });
 

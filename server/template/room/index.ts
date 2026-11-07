@@ -1,8 +1,10 @@
 /**
- * Server rooms for this game. Add each Room class here; the host registers them by name.
- * The template ships with none yet — the shared room base (fixed tick, replays, debug
- * commands) is the next platform task.
+ * Server rooms for this game. Each entry builds a Room class from the host's shared deps;
+ * the host registers them by name. Clients create or join "game".
  */
-import type { RoomClass } from "@sdm/host";
+import { createGameRoom, type RoomFactory } from "@sdm/host";
+import { templateGame } from "../shared/game.ts";
 
-export const rooms: Record<string, RoomClass> = {};
+export const rooms: Record<string, RoomFactory> = {
+  game: (deps) => createGameRoom(templateGame, deps),
+};

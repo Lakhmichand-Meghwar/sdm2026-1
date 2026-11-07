@@ -6,8 +6,8 @@
 
 | Package | Path | What it is |
 |---|---|---|
-| `@sdm/core` | `server/core/` | Contract types (`shared`), plus the server-side and client-side core used by every game |
-| `@sdm/host` | `server/host/` | `startGameServer()`: the Colyseus + Express host with `/health` and static client hosting |
+| `@sdm/core` | `server/core/` | Contract types (`shared`), the sim contract (`sim`), the Simulation and replay runner (`server`), and the client core (`client`) |
+| `@sdm/host` | `server/host/` | `startGameServer()` and `createGameRoom()`: the Colyseus + Express host, routes, logs and stats. Room test helpers in `@sdm/host/testing` |
 | `@sdm/template` | `server/template/` | Reference game. Teams copy it to `games/team-N/` to start |
 | `@sdm/tooling` | `server/tooling/` | Shared TypeScript config (`tsconfig.base.json`) |
 
@@ -15,7 +15,7 @@ Docs for the platform live in `server/ARCHITECTURE.md` and `server/docs/`.
 
 ## Rules for teams
 
-- Your game lives in `games/team-N/` and is its own package (`@team-N/game`). Import the platform only through package names: `@sdm/core/shared`, `@sdm/core/server`, `@sdm/core/client`, `@sdm/host`.
+- Your game lives in `games/team-N/` and is its own package (`@team-N/game`). Import the platform only through package names: `@sdm/core/shared`, `@sdm/core/sim`, `@sdm/core/server`, `@sdm/core/client`, `@sdm/host`, `@sdm/host/testing`.
 - Never import from another team's folder, and never import platform files by relative path (`../../server/...`).
 - Need a platform change? Open an issue with the `platform` label that says what your team needs and why. Don't patch `server/` from a team PR.
 
@@ -25,6 +25,18 @@ Docs for the platform live in `server/ARCHITECTURE.md` and `server/docs/`.
 - Changes to `server/core/src/shared/` (the contract) are breaking by default. Say in the PR which games are affected and how they migrate.
 - `pnpm typecheck` and `pnpm test` run for every workspace package, so a platform PR is only green when every team's game still builds.
 - Don't add a dependency to a platform package unless every game benefits. Game-specific dependencies belong in `games/team-N/package.json`.
+
+## Writing a game (the game definition)
+
+Building a client or a game? Read [`docs/CLIENT_GUIDE.md`](docs/CLIENT_GUIDE.md) first: connecting, join by code, reconnect, messages, routes, debugging.
+
+- Put the rules in `games/team-N/shared/game.ts` as a `GameDefinition` from `@sdm/core/sim`. See `server/template/shared/game.ts`.
+- The definition and everything in `shared/` must stay browser-safe: import only `@colyseus/schema`, `zod`, `@sdm/core/shared` and `@sdm/core/sim`. Never `colyseus`, `@sdm/host`, `@sdm/core/server` or `node:*`. The client imports it to predict.
+- Your state extends `BaseState` (`BaseState.extend({...}, "MyState")`). Don't write `tick`, `code`, `paused` or `seats` yourself; the room base owns them. Read `seats` if you need to know who is connected.
+- Your config schema extends `RoomSettingsSchema`, and `config/game.json` sets `tickRate`, `patchRate`, `maxPlayers` and `reconnectSeconds` for your game.
+- Register rooms in `room/index.ts` as factories: `{ game: (deps) => createGameRoom(myGame, deps) }`.
+- Add game debug commands in `commands` (e.g. `spawn`, `tp`). Built-ins (`pause`, `step`, `timescale`, `seed`, `set`, `kick`) can't be overridden. All of them are recorded in replays and rejected in production.
+- Room tests import `boot` from `@sdm/host/testing`, never from `@colyseus/testing` directly, and use their own port.
 
 ## Determinism rules (all game code)
 
@@ -64,13 +76,39 @@ Why these rules exist:
 | `pnpm typecheck` | TypeScript across every package |
 | `pnpm test` | Vitest across every package |
 | `pnpm build` | Build every game's client |
+| `pnpm workflow:classify --kind issue\|pr\|commit` | Decide the type, team label, template and base branch for a change (`--json` for scripts; see "Templates, classification and checks" in `CLAUDE.md`) |
+| `pnpm check:issue` / `pnpm check:pr` / `pnpm check:commit` | Check an issue, a pull request or commit messages against their template or format |
+| `pnpm preflight` | Everything a branch must pass before it becomes a PR (see "Preflight" below) |
+| `pnpm preflight:quick` | Lint, typecheck and ownership in a few seconds. Agents run it after every change |
+| `pnpm labels:sync` | Make the repo's GitHub labels match `server/tooling/workflow/labels.json` (dry run; `--apply` to change) |
+| `pnpm labels:prs` | Update every PR's `stackpile` and `waiting-on.*` labels (`--dry-run`, `--number <n>`). The "PR labels" workflow runs it every 10 minutes |
 
-Run `pnpm lint && pnpm typecheck && pnpm test` before opening a PR.
+Run `pnpm preflight` before opening a PR. It must pass.
+
+## Preflight
+
+`pnpm preflight` runs, in order: `check:setup`, lint, typecheck, test, build, then the checks below, and prints how to fix every failure. Every check also runs on its own, takes `--json`, and exits with 0 (OK), 1 (problems found), 2 (usage error) or 3 (environment problem, e.g. `gh` not logged in). The branch-level checks compare the current branch with the base the branch model expects; pass `--base <branch>` to override and `--offline` to skip GitHub lookups.
+
+| Check | Fails when |
+|---|---|
+| `check:branch` | the branch isn't `<team-label>/<issue>-<description>`; it targets the wrong base (team work → `feature/team-N`; platform and instructor work → `main`; `feature/team-N` → `main`; `main` → `prod` or `feature/team-N`); or its issue is missing, closed or has a different label |
+| `check:ownership` | a work branch changes files another label owns (`server/tooling/ownership.json`). With a line `Cross-team: <why>` in the issue they are warnings instead |
+| `check:commit` | a commit on the branch doesn't follow the commit format (see `CLAUDE.md`) |
+| `check:files` | dependencies, build output, `.env` files or files over 1 MB are committed |
+| `check:secrets` | an added line looks like a token, private key or hard-coded password |
+| `check:docs` | a relative link or heading anchor in any Markdown file is broken |
+| `check:config` | a game's `config/game.json` doesn't match the `*ConfigSchema` its `shared/index.ts` exports |
+| `check:determinism` | simulation code (`room/`, `shared/`, the server core) calls `Math.random()`, `Date.now()`, `performance.now()` or `new Date()`. A line can opt out with `// determinism-ok: <reason>` |
+| `check:contract` | never fails; warns when `server/core/src/shared/` changes, because every game depends on it |
+
+The checks live in `server/tooling/workflow/` with the rest of the workflow toolkit: pure rules in `lib/`, a thin command per check, no runtime dependencies (`check:config` needs `pnpm install`, because it loads each game's schema).
 
 ## CI
 
-Every pull request and every push to `main` runs the **CI** checks (`.github/workflows/ci.yml`) on Ubuntu, Windows and macOS: `pnpm install --frozen-lockfile`, `pnpm check:setup --ci`, `pnpm lint`, `pnpm typecheck`, `pnpm test` and `pnpm build`, the same commands as above. A red check on any OS means the PR is not ready for review.
+Every pull request and every push to `main` runs the **CI** checks (`.github/workflows/ci.yml`) on Linux, one job per check so a PR shows exactly which one failed: 🧰 setup (`pnpm check:setup --ci`), 📝 config (`pnpm check:config`), 🧹 lint, 🔎 typecheck, 🧪 test and 📦 build, the same commands as above. Each job installs with `pnpm install --frozen-lockfile` through the shared `.github/actions/setup`. Only Linux runs, because every game deploys to Railway, which is Linux. A red check means the PR is not ready for review.
 
 - It covers every package in the workspace, so a platform PR only passes when every team's game still builds.
 - `--frozen-lockfile` fails when `pnpm-lock.yaml` is out of date: run `pnpm install` and commit the lockfile.
 - Actions are pinned to commit SHAs. Update them through a platform PR.
+
+A second workflow, **Workflow checks** (`.github/workflows/workflow-checks.yml`), runs `pnpm check:pr` and `pnpm check:commit` on every pull request: title, team label, branch and base names, template headings, linked issue, ticked checklist and the commit message format. It also runs the branch-level preflight checks (`check:branch`, `check:ownership`, `check:files`, `check:secrets`, `check:docs`, `check:determinism`, `check:contract`); `ci.yml` runs `check:config` after install. It reruns when the title or description is edited, so fix the text and the check turns green.
