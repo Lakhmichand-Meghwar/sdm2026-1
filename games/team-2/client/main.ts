@@ -8,6 +8,7 @@ import {
   type Tool,
   tickMs,
 } from "../shared/escape.ts";
+import { playDrawer } from "./drawer.ts";
 import { playFootsteps, unlockAudio, walkers } from "./footsteps.ts";
 import "./style.css";
 
@@ -87,6 +88,7 @@ function selectStation(station: Station) {
 }
 
 function setDrawer(open: boolean) {
+  if (open && drawer.hidden) playDrawer();
   drawer.hidden = !open;
   drawerToggle.setAttribute("aria-expanded", String(open));
 }
@@ -94,6 +96,7 @@ function setDrawer(open: boolean) {
 function inspect(station: Station) {
   if (snapshot?.phase !== "running" || snapshot.ghostSeconds !== null) return;
   selectStation(station);
+  if (station === "desk") playDrawer();
   opened = station;
   lockCode.value = "";
   setDrawer(false);
