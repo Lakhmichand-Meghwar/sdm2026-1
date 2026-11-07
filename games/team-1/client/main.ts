@@ -1,6 +1,7 @@
 import { Client, type Room } from "@colyseus/sdk";
 import { normalizeRoomCode, readClientParams } from "@sdm/core/client";
 import { JoinByCodeResponseSchema, Routes, ServerMessage } from "@sdm/core/shared";
+import { timeLoopGame } from "../shared/game.ts";
 import type { TimeLoopInput, TimeLoopState } from "../shared/index.ts";
 import { isClueId } from "../shared/rules.ts";
 import "./style.css";
@@ -87,7 +88,8 @@ function connect(joined: Room<TimeLoopState>): void {
 }
 
 async function createRoom(solo: boolean): Promise<void> {
-  connect(await client.create<TimeLoopState>(ROOM_NAME, { private: true, name: chosenName(), solo }));
+  const time = ui.getLoopTime();
+  connect(await client.create<TimeLoopState>(ROOM_NAME, { private: true, name: chosenName(), solo, time }));
 }
 
 async function joinByCode(raw: string): Promise<void> {
@@ -209,6 +211,7 @@ function bindEnter(id: string, handler: () => void): void {
 
 document.addEventListener("DOMContentLoaded", () => {
   ui.startRain();
+  ui.renderLoopTimes(timeLoopGame.config.loopTimes, timeLoopGame.config.defaultLoopTime);
   void loadNetworkAddress();
 
   bind("btn-start", startIntro);

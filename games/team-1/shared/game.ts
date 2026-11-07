@@ -106,6 +106,27 @@ function levelConfig(ctx: Ctx): TimeLoopConfig["levels"][number] {
   return level;
 }
 
+/** The loop time a room is made with: one of `loopTimes`, or the default for anything else. */
+export function pickLoopTime(config: TimeLoopConfig, requested: unknown): number {
+  return typeof requested === "number" && config.loopTimes.includes(requested)
+    ? requested
+    : config.defaultLoopTime;
+}
+
+/**
+ * Seconds per loop in a room. `loopTime` is the first room's time; every later room keeps the
+ * difference from the first room that `config.levels` gives it (90, 80, 70 → 60, 50, 40 for 60).
+ */
+export function levelDuration(config: TimeLoopConfig, loopTime: number, level: number): number {
+  const first = config.levels[0]?.duration ?? 0;
+  const own = config.levels[level - 1]?.duration ?? first;
+  return own - first + pickLoopTime(config, loopTime);
+}
+
+function duration(ctx: Ctx): number {
+  return levelDuration(ctx.config, ctx.state.loopTime, ctx.state.level);
+}
+
 function clearRoom(ctx: Ctx): void {
   const s = ctx.state;
   s.paintClicks = 0;
@@ -129,7 +150,7 @@ function beginLevel(ctx: Ctx, level: number, previous: string): void {
   s.level = level;
   s.loop = 1;
   clearRoom(ctx);
-  s.timeLeft = levelConfig(ctx).duration;
+  s.timeLeft = duration(ctx);
   s.subTick = 0;
   s.readyMask = 0;
   s.previous = previous;
@@ -189,7 +210,7 @@ function tickClock(ctx: Ctx): void {
     if (s.countdown === 0) {
       s.loop += 1;
       s.resets += 1;
-      s.timeLeft = levelConfig(ctx).duration;
+      s.timeLeft = duration(ctx);
       s.subTick = 0;
       clearRoom(ctx);
       s.phase = "playing";
@@ -587,6 +608,8 @@ export const timeLoopGame: GameDefinition<TimeLoopState, TimeLoopInput, TimeLoop
     if (s.players.size === 0) {
       s.solo = options.solo === true;
       s.startedSolo = s.solo;
+      // Only the room's creator picks the clock; whoever joins by code plays with it.
+      s.loopTime = pickLoopTime(ctx.config, options.time);
     }
     const taken = new Set<number>();
     for (const other of s.players.values()) taken.add(other.slot);

@@ -1,7 +1,7 @@
 import { runReplay, Simulation } from "@sdm/core/server";
 import { describe, expect, it } from "vitest";
-import { timeLoopGame as game } from "./game.ts";
-import type { TimeLoopInput } from "./index.ts";
+import { timeLoopGame as game, levelDuration } from "./game.ts";
+import { TimeLoopConfigSchema, type TimeLoopInput } from "./index.ts";
 import { type ClueId, type CodeKind, SHELF_ORDER, type Target } from "./rules.ts";
 
 /** "a" is detective 1 (slot 1), "b" is detective 2 (slot 2). */
@@ -165,6 +165,97 @@ describe("clock", () => {
     expect(room.state.paintClicks).toBe(0);
     expect(room.journal("b")).toEqual(["blue4"]);
     expect(room.journal("a")).toEqual([]);
+  });
+});
+
+describe("loop time", () => {
+  /** Detective 1 makes the room with `time`; detective 2 joins, maybe asking for a different time. */
+  function madeWith(time: number | undefined, joinerTime?: number): Room {
+    const room = makeRoom();
+    room.sim.join("a", { name: "Ada", time });
+    room.sim.join("b", { name: "Bo", time: joinerTime });
+    room.tick();
+    ready(room);
+    return room;
+  }
+
+  it("offers 60, 90 and 120 seconds, with 90 picked by default", () => {
+    expect(game.config.loopTimes).toEqual([60, 90, 120]);
+    expect(game.config.defaultLoopTime).toBe(90);
+  });
+
+  it("keeps today's clock when the creator picks nothing: 90, 80 and 70 seconds", () => {
+    const room = madeWith(undefined);
+    expect(room.state.loopTime).toBe(90);
+    expect([1, 2, 3].map((level) => levelDuration(game.config, room.state.loopTime, level))).toEqual([
+      90, 80, 70,
+    ]);
+  });
+
+  it("gives every room 10 seconds less than the one before, whatever the choice", () => {
+    expect([1, 2, 3].map((level) => levelDuration(game.config, 60, level))).toEqual([60, 50, 40]);
+    expect([1, 2, 3].map((level) => levelDuration(game.config, 120, level))).toEqual([120, 110, 100]);
+  });
+
+  it("runs a 60-second game through all three rooms on the shorter clock", () => {
+    const room = madeWith(60);
+    expect(room.state.timeLeft).toBe(60);
+    clearOffice(room);
+    expect(room.state.level).toBe(2);
+    expect(room.state.timeLeft).toBe(50);
+    ready(room);
+    clearArchive(room);
+    expect(room.state.level).toBe(3);
+    expect(room.state.timeLeft).toBe(40);
+    ready(room);
+    clearVault(room);
+    expect(room.state.phase).toBe("won");
+  });
+
+  it("refills the clock to the chosen time after a reset", () => {
+    const room = madeWith(120);
+    room.tick(game.config.tickRate * 120);
+    expect(room.state.phase).toBe("resetting");
+    room.tick(Math.ceil(game.config.resetSeconds * game.config.tickRate));
+    expect(room.state.phase).toBe("playing");
+    expect(room.state.timeLeft).toBe(120);
+  });
+
+  it("uses the default for a time that isn't one of the choices", () => {
+    expect(madeWith(45).state.timeLeft).toBe(90);
+    expect(madeWith(0).state.timeLeft).toBe(90);
+  });
+
+  it("lets only the room's creator pick: a joiner's choice is ignored", () => {
+    const room = madeWith(60, 120);
+    expect(room.state.loopTime).toBe(60);
+    expect(room.state.timeLeft).toBe(60);
+  });
+
+  it("keeps the chosen time when the game starts over", () => {
+    const room = madeWith(60);
+    clearOffice(room);
+    ready(room);
+    clearArchive(room);
+    ready(room);
+    clearVault(room);
+    room.act("a", { type: "restart" });
+    expect(room.state.level).toBe(1);
+    expect(room.state.timeLeft).toBe(60);
+  });
+
+  it("replays a game with a chosen time to the same final state", () => {
+    const room = madeWith(120);
+    clearOffice(room);
+    const replay = room.sim.snapshot();
+    expect(runReplay(game, replay).stateHash).toBe(replay.final?.stateHash);
+  });
+
+  it("rejects a config whose default isn't one of the choices, or whose shortest choice leaves a room no time", () => {
+    const base = game.config;
+    expect(TimeLoopConfigSchema.safeParse({ ...base, defaultLoopTime: 75 }).success).toBe(false);
+    expect(TimeLoopConfigSchema.safeParse({ ...base, loopTimes: [20, 90] }).success).toBe(false);
+    expect(TimeLoopConfigSchema.safeParse(base).success).toBe(true);
   });
 });
 

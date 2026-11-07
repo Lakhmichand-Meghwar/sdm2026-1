@@ -77,6 +77,10 @@
           <span>Your name</span>
           <input id="lobby-name" class="text-input" type="text" maxlength="24" placeholder="Detective" autocomplete="off" />
         </label>
+        <fieldset class="lobby-field lobby-time">
+          <legend>Loop time for a new room <span class="lobby-time-note">(later rooms get 10s less)</span></legend>
+          <div class="time-options" id="lobby-time"></div>
+        </fieldset>
         <div class="lobby-actions">
           <button type="button" class="btn-primary" id="lobby-create">Create a room</button>
           <button type="button" class="btn-secondary" id="lobby-solo">Play alone</button>

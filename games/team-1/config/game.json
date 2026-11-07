@@ -9,5 +9,7 @@
     { "duration": 80, "penalty": 5 },
     { "duration": 70, "penalty": 5 }
   ],
-  "resetSeconds": 3
+  "resetSeconds": 3,
+  "loopTimes": [60, 90, 120],
+  "defaultLoopTime": 90
 }
