@@ -521,3 +521,97 @@ describe("playing alone", () => {
     expect(room.state.paintClicks).toBe(1);
   });
 });
+
+describe("a Play alone room after somebody joined and left", () => {
+  function playingSolo(): Room {
+    const room = makeRoom();
+    room.sim.join("a", { name: "Ada", solo: true });
+    room.tick();
+    room.act("a", { type: "ready" });
+    return room;
+  }
+
+  /** The seat is held while the player is away, then removed when it expires. */
+  function seatExpires(room: Room, who: Who): void {
+    room.sim.drop(who);
+    room.tick(game.config.tickRate * game.config.reconnectSeconds);
+    room.sim.leave(who);
+  }
+
+  it("goes back to one player when the joiner leaves, and the clock runs again", () => {
+    const room = playingSolo();
+    room.sim.join("b", { name: "Bo" });
+    room.tick();
+    expect(room.state.solo).toBe(false);
+
+    seatExpires(room, "b");
+    expect(room.state.players.size).toBe(1);
+    expect(room.state.solo).toBe(true);
+
+    const before = room.state.timeLeft;
+    room.tick(game.config.tickRate * 5);
+    expect(room.state.timeLeft).toBe(before - 5);
+  });
+
+  it("lets the one player who is left use everything again", () => {
+    const room = playingSolo();
+    room.sim.join("b", { name: "Bo" });
+    room.tick();
+    seatExpires(room, "b");
+    room.tap("a", "note");
+    expect(room.journal("a")).toContain("blue4");
+  });
+
+  it("keeps the journals when the original player is the one who leaves", () => {
+    const room = playingSolo();
+    room.tap("a", "painting");
+    room.sim.join("b", { name: "Bo" });
+    room.tick();
+    room.tap("b", "note");
+    room.share("b", "blue4");
+    room.tap("a", "photo");
+
+    seatExpires(room, "a");
+    expect(room.state.solo).toBe(true);
+    expect(room.state.players.get("b")?.slot).toBe(1);
+    expect(room.journal("a")).toContain("blue4");
+    expect(room.state.clues2.length).toBe(0);
+
+    const before = room.state.timeLeft;
+    room.tick(game.config.tickRate * 3);
+    expect(room.state.timeLeft).toBe(before - 3);
+  });
+
+  it("can still be finished by the player who is left", () => {
+    const room = playingSolo();
+    room.sim.join("b", { name: "Bo" });
+    room.tick();
+    seatExpires(room, "a");
+    for (let i = 0; i < 4; i++) room.tap("b", "painting");
+    room.tap("b", "key");
+    room.tap("b", "cabinet");
+    room.code("b", "laptop", "1998");
+    room.tap("b", "door1");
+    expect(room.state.level).toBe(2);
+  });
+
+  it("starts the loop for a player who was already ready in the briefing", () => {
+    const room = makeRoom();
+    room.sim.join("a", { name: "Ada", solo: true });
+    room.tick();
+    room.sim.join("b", { name: "Bo" });
+    room.tick();
+    room.act("b", { type: "ready" });
+    seatExpires(room, "a");
+    expect(room.state.phase).toBe("playing");
+  });
+
+  it("does not turn a two-player room into a single-player room", () => {
+    const room = started();
+    seatExpires(room, "b");
+    expect(room.state.solo).toBe(false);
+    const before = room.state.timeLeft;
+    room.tick(game.config.tickRate * 3);
+    expect(room.state.timeLeft).toBe(before);
+  });
+});
