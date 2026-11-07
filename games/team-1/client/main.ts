@@ -1,9 +1,10 @@
 import { Client, type Room } from "@colyseus/sdk";
-import { buildInviteLink, normalizeRoomCode, readClientParams } from "@sdm/core/client";
+import { normalizeRoomCode, readClientParams } from "@sdm/core/client";
 import { JoinByCodeResponseSchema, Routes, ServerMessage } from "@sdm/core/shared";
 import type { TimeLoopInput, TimeLoopState } from "../shared/index.ts";
 import { isClueId } from "../shared/rules.ts";
 import "./style.css";
+import { currentInviteLink, loadNetworkAddress } from "./invite.ts";
 import { TAPS } from "./targets.ts";
 import * as ui from "./ui.ts";
 import * as view from "./view.ts";
@@ -164,18 +165,18 @@ async function lobbyAction(action: () => Promise<void>): Promise<void> {
   }
 }
 
-async function copyInvite(): Promise<void> {
-  const code = document.getElementById("wait-code")?.textContent ?? "";
-  const link = buildInviteLink(location.href, code);
-  const button = document.getElementById("wait-copy");
+async function copyInvite(button: HTMLElement | null): Promise<void> {
+  const code = document.getElementById("room-code")?.textContent ?? "";
+  if (!button || !normalizeRoomCode(code)) return;
+  const label = button.textContent;
   try {
-    await navigator.clipboard.writeText(link);
-    if (button) button.textContent = "Copied";
+    await navigator.clipboard.writeText(currentInviteLink(code));
+    button.textContent = "Copied";
   } catch {
-    if (button) button.textContent = "Copy the link above";
+    button.textContent = "Select the link and copy it";
   }
   setTimeout(() => {
-    if (button) button.textContent = "Copy invite link";
+    button.textContent = label;
   }, 2000);
 }
 
@@ -208,6 +209,7 @@ function bindEnter(id: string, handler: () => void): void {
 
 document.addEventListener("DOMContentLoaded", () => {
   ui.startRain();
+  void loadNetworkAddress();
 
   bind("btn-start", startIntro);
   bind("intro-next", nextIntro);
@@ -217,7 +219,8 @@ document.addEventListener("DOMContentLoaded", () => {
   bind("lobby-solo", () => void lobbyAction(() => createRoom(true)));
   bind("lobby-join", () => void lobbyAction(() => joinByCode(ui.getLobbyCode())));
   bindEnter("lobby-code", () => void lobbyAction(() => joinByCode(ui.getLobbyCode())));
-  bind("wait-copy", () => void copyInvite());
+  bind("wait-copy", () => void copyInvite(document.getElementById("wait-copy")));
+  bind("invite-copy", () => void copyInvite(document.getElementById("invite-copy")));
 
   bind("brief-go", () => send({ type: "ready" }));
   bind("btn-restart", () => send({ type: "restart" }));

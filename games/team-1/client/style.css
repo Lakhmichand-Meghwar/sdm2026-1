@@ -2523,3 +2523,40 @@ button:disabled {
 #bottom-hud.solo .hud-clues + .hud-divider {
   display: none;
 }
+
+/* ── invite link in the top bar ──────────────────────────────────────────── */
+.top-left {
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.invite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.invite-link {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.6rem;
+  color: var(--dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+.btn-mini {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-family: var(--ff);
+  font-size: 0.6rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid rgba(184, 136, 48, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 160ms;
+}
+.btn-mini:hover {
+  background: rgba(184, 136, 48, 0.12);
+}
