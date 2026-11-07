@@ -413,6 +413,19 @@ Replays of finished rooms stay in memory for an hour (50 rooms at most) and are 
 
 Start a new game with `pnpm new-game team-N`. More rules: [../CLAUDE.md](../CLAUDE.md).
 
+## QA screenshots and evidence
+
+Run `pnpm qa:shot <scenario>` with the dev client running to load a scenario through
+`?scenario=<id>` in headless Playwright and save a timestamped PNG under
+`.qa/screenshots/`. The command prints the saved path. QA artifacts are ignored by
+Git. Install the Playwright browser once with `pnpm exec playwright install chromium`.
+Run `pnpm qa:evidence` to print an **Asserted by** block containing test files
+changed on the branch and the latest `.qa/last-test.json` (when present). Create
+that result file with `pnpm test --reporter=json --outputFile=.qa/last-test.json`.
+scenarios found in QA artifacts, and replay ids from `.qa/` or `replays/`; use
+`--json` for machine-readable output. Evidence compares against `upstream/main` or
+`origin/main`, so keep your fork's main synced.
+
 ## Debugging a laggy playtest
 
 Filter Railway logs by `@code:QXTR`, then read the room's `room.stats` lines (every 10 s):

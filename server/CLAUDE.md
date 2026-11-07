@@ -8,7 +8,6 @@
 |---|---|---|
 | `@sdm/core` | `server/core/` | Contract types (`shared`), the sim contract (`sim`), the Simulation and replay runner (`server`), and the client core (`client`) |
 | `@sdm/host` | `server/host/` | `startGameServer()` and `createGameRoom()`: the Colyseus + Express host, routes, logs and stats. Room test helpers in `@sdm/host/testing` |
-| `@sdm/gateway` | `server/gateway/` | The public front of an environment: serves each game at `/<game>/` (for example `/team-2/`) and proxies it to that game's private service, WebSockets included. Read [ARCHITECTURE.md](ARCHITECTURE.md) before changing it |
 | `@sdm/template` | `server/template/` | Reference game. Teams copy it to `games/team-N/` to start |
 | `@sdm/tooling` | `server/tooling/` | Shared TypeScript config (`tsconfig.base.json`) |
 
@@ -90,7 +89,16 @@ Why these rules exist:
 | `pnpm team:promote <N>` / `pnpm branches:sync` / `pnpm release` | Open the PR `feature/team-N` → `main`, `main` → each `feature/team-N` that is behind, or `main` → `prod` |
 | `pnpm env:status` / `pnpm env:wait <env> <sha>` | Compare the commit each Railway environment runs with `main` / `prod`, or wait until one runs a commit |
 | `pnpm labels:sync` | Make the repo's GitHub labels match `server/tooling/workflow/labels.json` (dry run; `--apply` to change) |
-| `pnpm labels:prs` | Update every PR's `stackpile` and `waiting-on.*` labels (`--dry-run`, `--number <n>`). The "PR labels" workflow runs it for all PRs on every PR or review event, every 10 minutes and on demand |
+| `pnpm labels:prs` | Update every PR's `stackpile` and `waiting-on.*` labels (`--dry-run`, `--number <n>`). The "PR labels" workflow runs it every 10 minutes |
+| `pnpm qa:shot <scenario>` | Load a validated scenario headlessly and save a screenshot under `.qa/screenshots/` |
+| `pnpm qa:evidence [--json]` | Print changed test files, the latest QA results, scenarios and replay ids |
+
+Install the Playwright browser once before using `qa:shot`:
+`pnpm exec playwright install chromium`.
+`qa:evidence` compares against `upstream/main` or `origin/main`, so keep your fork's main synced.
+
+To record the latest Vitest counts for `qa:evidence`, run
+`pnpm test --reporter=json --outputFile=.qa/last-test.json`.
 
 Run `pnpm preflight` before opening a PR. It must pass.
 
@@ -159,7 +167,7 @@ These do the steps of [Branches](../CLAUDE.md#branches) and [Deploying to Railwa
 |---|---|---|
 | `pnpm sync` | Fetches the base of the current branch (team work: `feature/team-N`; platform and instructor work: `main`; `--base <branch>` to override) and merges `origin/<base>` into it. On a conflict it lists every conflicted file and leaves the merge for you to finish (`git add`, `git commit`) or undo (`git merge --abort`). It never resolves a conflict and never pushes. `--dry-run` predicts the conflicts without merging | you're on `main`, `prod` or a `feature/team-N` (use `pnpm branches:sync`), there are uncommitted changes, or a merge is already in progress |
 | `pnpm team:promote <N> --issue <n>` | Opens `feature/team-N` → `main` from the chore template, titled `chore(team-N): merge feature/team-N into main`, labelled `team-N`, with `Closes #n` and the PRs merged into the feature branch. Warns when the feature branch is behind `main` or would conflict. `<N>` defaults to `--team`, then `git config sdm.team` | the feature branch has nothing `main` lacks, a PR `feature/team-N` → `main` is already open, or issue `#n` is missing, closed or not labelled `team-N` |
-| `pnpm branches:sync [<N>...] --issue <n>` | Opens `main` → `feature/team-N` from the sync template for every feature branch that is behind `main` (or only teams `<N>...`), labelled `platform`, with `Refs #n`, the PRs it brings and whether it conflicts. Branches that are up to date or already have an open sync PR are skipped. The "Branches sync" workflow runs it after every merge into `main` (see "Sync PRs open automatically" below) | issue `#n` is missing or not labelled `platform` |
+| `pnpm branches:sync [<N>...] --issue <n>` | Opens `main` → `feature/team-N` from the sync template for every feature branch that is behind `main` (or only teams `<N>...`), labelled `platform`, with `Refs #n`, the PRs it brings and whether it conflicts. Branches that are up to date or already have an open sync PR are skipped | issue `#n` is missing or not labelled `platform` |
 | `pnpm release --issue <n>` | Waits until CI has finished green on `main`'s head commit (the [release gate](../CLAUDE.md#blocks) fails while CI runs; `--timeout <s>`, default 1800, `--interval <s>`, default 20), then opens `main` → `prod` from the release template: `Refs #n`, the PRs merged since the last release (the merge commits in `origin/prod..origin/main`) and a Rollback section naming the commit `prod` is on now. No version numbers or tags. It never merges into `prod`: a person does that after the checks in [Deploying to Railway](../CLAUDE.md#rules) | a release PR is already open, `prod` already has everything on `main`, CI is red or still running at the timeout, or issue `#n` is missing or not labelled `platform` |
 | `pnpm env:status` | Reads `/health` of development and production (`--env dev\|prod` for one) and compares the `sha` each reports with `origin/main` and `origin/prod`. `--offline` skips the `git fetch` | (exit 1) an environment is unreachable, not `ok`, reports the wrong `APP_ENV` or runs another commit |
 | `pnpm env:wait <dev\|prod> <sha>` | Polls that environment's `/health` until it reports the commit, e.g. after a merge (`--timeout <s>`, default 600, `--interval <s>`, default 10). Failed requests are retried, because a deploy restarts the service | (exit 1) the commit didn't arrive before the timeout, or the URL reports the other environment's `APP_ENV` |
@@ -169,16 +177,6 @@ These do the steps of [Branches](../CLAUDE.md#branches) and [Deploying to Railwa
 The environment URLs aren't in the repository. Set `SDM_DEV_URL` and `SDM_PROD_URL` (the base URL of a game service, e.g. `https://<service>.up.railway.app`), or pass `--dev-url` / `--prod-url`. Without them `env:status` and `env:wait` exit with 3 and say what to set.
 
 A release, step by step: `pnpm release --issue <n>` opens the PR once CI is green on `main`; `pnpm env:status` (or `pnpm env:wait dev <sha>`) shows development runs that commit; someone else approves; a person merges; then `pnpm env:wait prod <merge commit>` shows production runs it.
-
-### Sync PRs open automatically
-
-Nobody has to run `pnpm branches:sync` by hand. The **Branches sync** workflow (`.github/workflows/branches-sync.yml`) runs `node server/tooling/workflow/branches-sync.mjs --issue <n>` after every push to `main`, every hour (minute 17) as a safety net, and on demand (Actions, "Branches sync", Run workflow). `<n>` is the standing issue [#221](https://github.com/nd2003/sdm2026-1/issues/221), "Keep feature branches in sync with main"; the `SYNC_ISSUE` repository variable overrides it. Runs queue instead of cancelling each other, so a run is never stopped halfway through opening PRs. The job summary lists every feature branch, what happened to it and the PR.
-
-- It only opens missing sync PRs. A sync PR's head is `main` itself, so an open one picks up new commits on `main` without the workflow doing anything.
-- It never merges. The team reviews and merges its sync PR; with conflicts it resolves them on a work branch (see [Branches](../CLAUDE.md#branches)) or asks platform.
-- `branches-sync.mjs` fetches the full history itself when the checkout is shallow (what `actions/checkout` makes), so it needs no `fetch-depth: 0` and no install step.
-
-**`SYNC_TOKEN`.** GitHub does not start other workflows (CI, Workflow checks) for PRs opened with the built-in `GITHUB_TOKEN`. So the workflow uses the `SYNC_TOKEN` Actions secret when it is set: a fine-grained personal access token for `nd2003/sdm2026-1` only, with *Pull requests: read and write*, *Issues: read* and *Contents: read*. A repository admin adds it (see #161); the sync PRs are then opened as that token's owner. Without it the workflow falls back to `github.token` and puts a warning in the job summary: the PRs it opened have no checks until the next push to `main` updates them, or someone closes and reopens them. The fallback also needs *Allow GitHub Actions to create and approve pull requests* on in the repository's Actions settings; with it off, the run fails with exit code 3.
 
 ## Git hooks
 

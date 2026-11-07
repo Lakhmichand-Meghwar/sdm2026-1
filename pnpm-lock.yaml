@@ -41,6 +41,31 @@ importers:
         specifier: 4.6.7
         version: 4.6.7
 
+  games/team-1:
+    dependencies:
+      '@colyseus/schema':
+        specifier: 5.0.45
+        version: 5.0.45(typescript@5.9.3)
+      '@colyseus/sdk':
+        specifier: 0.18.9
+        version: 0.18.9(@colyseus/core@0.18.27)(typescript@5.9.3)(zod@4.6.7)
+      '@sdm/core':
+        specifier: workspace:*
+        version: link:../../server/core
+      '@sdm/host':
+        specifier: workspace:*
+        version: link:../../server/host
+      zod:
+        specifier: 4.6.7
+        version: 4.6.7
+    devDependencies:
+      '@sdm/tooling':
+        specifier: workspace:*
+        version: link:../../server/tooling
+      vite:
+        specifier: 8.3.6
+        version: 8.3.6(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)
+
   games/team-2:
     dependencies:
       '@colyseus/schema':
