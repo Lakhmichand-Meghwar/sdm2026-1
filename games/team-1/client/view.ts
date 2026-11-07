@@ -170,7 +170,7 @@ export function render(state: TimeLoopState, sessionId: string): void {
       ui.setOverlay("reset");
       break;
     case "won":
-      ui.setWin(state.totalLoops, state.finalTime, state.totalLoops - LEVEL_COUNT);
+      ui.setWin(state.resets, state.finalTime);
       ui.setOverlay(null);
       break;
     default:
