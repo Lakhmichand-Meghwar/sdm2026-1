@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { EXIT, parseArgs } from "../../server/tooling/workflow/lib/args.mjs";
 import { loadTypes } from "../../server/tooling/workflow/lib/types.mjs";
-import { collectStats, formatStudentReport, scoreAll } from "./lib/student-report.mjs";
+import { collectStats, docsFromReport, formatStudentReport, scoreAll } from "./lib/student-report.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const { flags, positional } = parseArgs(process.argv.slice(2), { boolean: ["json"] });
@@ -132,11 +132,7 @@ const prReport = JSON.parse(
     "run pr-report.mjs",
   ),
 );
-const docs = new Map();
-for (const team of prReport.teams) {
-  for (const p of team.passing ?? []) docs.set(p.number, { ok: true, rules: [] });
-  for (const p of team.failing ?? []) docs.set(p.number, { ok: false, rules: p.problems.map((x) => x.rule) });
-}
+const docs = docsFromReport(prReport);
 
 const members = JSON.parse(
   run(
