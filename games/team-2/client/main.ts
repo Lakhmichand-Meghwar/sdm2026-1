@@ -1,11 +1,12 @@
 ﻿import { Client, type Room } from "@colyseus/sdk";
 import {
-  clues,
   type EscapeAction,
-  type EscapeClue,
   type EscapeSnapshot,
   escapeRoomName,
   type Station,
+  stations,
+  type Tool,
+  tickMs,
 } from "../shared/escape.ts";
 import "./style.css";
 
@@ -14,168 +15,234 @@ const endpoint =
   (import.meta.env.DEV ? `${location.protocol}//${location.hostname}:2567` : location.origin);
 const client = new Client(endpoint);
 
-function element<T extends HTMLElement>(selector: string): T {
-  const result = document.querySelector<T>(selector);
-  if (!result) throw new Error(`Missing game element: ${selector}`);
+function element<T extends HTMLElement>(id: string): T {
+  const result = document.querySelector<T>(`#${id}`);
+  if (!result) throw new Error(`Missing game element: ${id}`);
   return result;
 }
 
-const lobby = element<HTMLFormElement>("#lobby");
-const code = element<HTMLInputElement>("#code");
-const create = element<HTMLButtonElement>("#create");
-const join = element<HTMLButtonElement>("#join");
-const game = element<HTMLElement>("#game");
-const status = element<HTMLElement>("#status");
-const timer = element<HTMLElement>("#timer");
-const round = element<HTMLElement>("#round");
-const notebook = element<HTMLElement>("#notebook");
-const inventory = element<HTMLElement>("#inventory");
-const terminal = element<HTMLFormElement>("#terminal");
-const relayStatus = element<HTMLElement>("#relay-status");
-const password = element<HTMLInputElement>("#password");
-const roomCode = element<HTMLInputElement>("#room-code");
-const roomActions = element<HTMLFieldSetElement>("#room-actions");
-const submitPassword = element<HTMLButtonElement>("#submit-password");
-const scene = element<HTMLElement>("#scene");
-const wardView = element<HTMLButtonElement>("#ward-view");
-const securityView = element<HTMLButtonElement>("#security-view");
-const restart = element<HTMLButtonElement>("#restart");
-const inspection = element<HTMLDialogElement>("#inspection");
-const inspectionTitle = element<HTMLElement>("#inspection-title");
-const inspectionText = element<HTMLElement>("#inspection-text");
-const flipPhoto = element<HTMLButtonElement>("#flip-photo");
-const clueTitles: Record<EscapeClue, string> = {
-  note: "Admission note",
-  cabinet: "Cabinet slip",
+const app = element("ward-app");
+const lobby = element<HTMLFormElement>("lobby");
+const code = element<HTMLInputElement>("code");
+const create = element<HTMLButtonElement>("create");
+const join = element<HTMLButtonElement>("join");
+const game = element("game");
+const status = element("status");
+const roomCode = element<HTMLInputElement>("room-code");
+const scene = element("scene");
+const wardView = element<HTMLButtonElement>("ward-view");
+const securityView = element<HTMLButtonElement>("security-view");
+const restart = element<HTMLButtonElement>("restart");
+const roomActions = element<HTMLFieldSetElement>("room-actions");
+const stationButtons = [...roomActions.querySelectorAll<HTMLButtonElement>("[data-target]")];
+const inspection = element<HTMLDialogElement>("inspection");
+const evidence = element("evidence");
+const collect = element<HTMLButtonElement>("collect");
+const inspectInventory = element<HTMLButtonElement>("inspect-inventory");
+const lock = element<HTMLFormElement>("lock");
+const lockCode = element<HTMLInputElement>("lock-code");
+const drawer = element("drawer");
+const drawerToggle = element<HTMLButtonElement>("drawer-toggle");
+const inventory = element("inventory");
+const notebook = element("notebook");
+const ghost = element("ghost");
+const holdGhost = element<HTMLButtonElement>("hold-ghost");
+const avatars = [element("patient-1"), element("patient-2")];
+const meters = [element<HTMLProgressElement>("resist-1"), element<HTMLProgressElement>("resist-2")];
+const names: Record<Station, string> = {
+  note: "Half-burnt paper",
+  desk: "Desk drawer",
+  painting: "Blue painting",
+  cabinet: "Medicine cabinet",
   photo: "Staff photograph",
-  terminal: "Terminal instructions",
+  exit: "Exit lock",
 };
-let notebookKey = "";
-const evidence = element<HTMLElement>("#evidence");
-const patients = [element<HTMLElement>("#patient-1"), element<HTMLElement>("#patient-2")];
-const stationButtons = [...roomActions.querySelectorAll<HTMLButtonElement>("button[data-target]")];
-const stationOrder: Station[] = ["note", "painting", "cabinet", "photo", "terminal", "exit"];
-let selected: Station = "note";
-let snapshot: EscapeSnapshot | undefined;
+const toolNames: Record<Tool, string> = { knife: "Knife", key: "Rusted key" };
+const skyClue = "Go to the part that has the colour of a free sky.";
+const cabinetClue =
+  "The staff photograph is locked. Enter the four digits from the burnt paper, then read the year.";
 let room: Room | undefined;
+let snapshot: EscapeSnapshot | undefined;
+let selected: Station = "note";
+let opened: Station | undefined;
+let pickup: Tool | undefined;
+let drawerKey = "";
+let holding = false;
 
-function showArea(area: string) {
-  scene.dataset.view = area;
-  wardView.setAttribute("aria-pressed", String(area === "ward"));
-  securityView.setAttribute("aria-pressed", String(area === "security"));
-  for (const button of stationButtons) button.hidden = button.dataset.area !== area;
+function send(action: EscapeAction) {
+  room?.send("action", action);
 }
 
 function selectStation(station: Station) {
   selected = station;
-  const area = stationOrder.indexOf(station) < 3 ? "ward" : "security";
-  showArea(area);
-  for (const button of stationButtons) button.dataset.selected = String(button.dataset.target === station);
-  send({ type: "move", station });
+  const security = station === "photo" || station === "exit";
+  scene.dataset.view = security ? "security" : "ward";
+  wardView.setAttribute("aria-pressed", String(!security));
+  securityView.setAttribute("aria-pressed", String(security));
+  for (const button of stationButtons) {
+    button.hidden = button.dataset.area !== scene.dataset.view;
+    button.dataset.selected = String(button.dataset.target === station);
+  }
+}
+
+function setDrawer(open: boolean) {
+  drawer.hidden = !open;
+  drawerToggle.setAttribute("aria-expanded", String(open));
 }
 
 function inspect(station: Station) {
-  if (snapshot?.phase !== "running") return;
+  if (snapshot?.phase !== "running" || snapshot.ghostSeconds !== null) return;
   selectStation(station);
-  if (station === "terminal") {
-    if (!password.disabled) password.focus();
-    else
-      status.textContent = snapshot.terminalUnlocked
-        ? "The terminal has unlocked the exit."
-        : "Ask your partner to stay at the open medicine cabinet to power the terminal.";
-    return;
-  }
-  send({ type: "inspect", target: station });
-  if (station !== "note" && station !== "photo" && station !== "cabinet") return;
-  if (station === "cabinet" && !snapshot.hasKey && !snapshot.cabinetOpen) return;
-  showEvidence(station, station === "photo");
-}
-
-function showEvidence(clue: EscapeClue, front = false) {
-  evidence.dataset.kind = clue === "photo" && !front ? "photo-back" : clue;
-  inspectionTitle.textContent = clueTitles[clue];
-  inspectionText.textContent = front
-    ? "Ward 04 staff. Someone in the photograph has your face."
-    : clues[clue];
-  flipPhoto.hidden = !front;
+  opened = station;
+  lockCode.value = "";
+  setDrawer(false);
+  send({ type: "inspect", station });
+  renderInspection(snapshot);
   if (!inspection.open) inspection.showModal();
 }
 
-function renderPatients(state: EscapeSnapshot) {
-  for (const [index, avatar] of patients.entries()) {
+function renderInspection(state: EscapeSnapshot) {
+  if (!opened) return;
+  let content: string;
+  pickup = undefined;
+  let needsInventory = false;
+  let lockLabel = "";
+  switch (opened) {
+    case "note":
+      content = state.paper ? `Code: ${state.paper}. ${skyClue}` : "Unfolding the paper…";
+      break;
+    case "desk":
+      if (!state.inventory.includes("knife")) pickup = "knife";
+      content = pickup ? "A knife lies inside the open drawer." : "The drawer is empty.";
+      break;
+    case "painting":
+      if (state.paintingCut && !state.inventory.includes("key") && !state.cabinetOpen) pickup = "key";
+      needsInventory = !state.paintingCut;
+      content = state.paintingCut
+        ? pickup
+          ? "A rusted key glints behind the torn canvas."
+          : "The canvas hangs in strips."
+        : "Something bulges behind the blue canvas. A blade could cut it open.";
+      break;
+    case "cabinet":
+      needsInventory = !state.cabinetOpen;
+      content = state.cabinetOpen ? cabinetClue : "Locked. The keyhole is lined with rust.";
+      break;
+    case "photo":
+      if (state.cabinetOpen && !state.year) lockLabel = "Code from the burnt paper";
+      content = state.year
+        ? `The date on the photograph is ${state.year}.`
+        : "The frame is sealed with a four-digit lock.";
+      break;
+    case "exit":
+      if (state.year) lockLabel = "Year from the photograph";
+      content = state.year
+        ? "Enter the year to open the exit."
+        : "The exit has a four-digit lock. Find the year first.";
+      break;
+  }
+  evidence.dataset.kind = opened;
+  evidence.dataset.pickup = pickup ?? "";
+  element("inspection-title").textContent = names[opened];
+  element("inspection-text").textContent = content;
+  collect.hidden = !pickup;
+  collect.textContent = pickup ? `Take ${toolNames[pickup].toLowerCase()}` : "";
+  inspectInventory.hidden = !needsInventory;
+  lock.hidden = !lockLabel;
+  element("lock-label").textContent = lockLabel;
+  element("lock-feedback").textContent = state.message;
+}
+
+function renderDrawer(state: EscapeSnapshot) {
+  const active = state.phase === "running" && state.ghostSeconds === null;
+  const patient = state.patients.find((entry) => entry.id === room?.sessionId);
+  const key = JSON.stringify([
+    state.inventory,
+    state.paper,
+    state.cabinetOpen,
+    state.year,
+    active,
+    patient?.station,
+  ]);
+  if (key === drawerKey) return;
+  drawerKey = key;
+  inventory.replaceChildren();
+  for (const item of state.inventory) {
+    const line = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = `Use ${toolNames[item]}`;
+    const station = item === "knife" ? "painting" : "cabinet";
+    button.disabled = !active || patient?.station !== station || (item === "knife" && state.paintingCut);
+    button.addEventListener("click", () => {
+      send({ type: "use", item });
+      inspect(station);
+    });
+    line.append(button);
+    inventory.append(line);
+  }
+  if (!state.inventory.length) inventory.textContent = "Empty";
+  const clues = [
+    state.paper && `Burnt paper: ${state.paper}. ${skyClue}`,
+    state.cabinetOpen && cabinetClue,
+    state.year && `Photograph year: ${state.year}`,
+  ].filter((clue): clue is string => typeof clue === "string");
+  notebook.replaceChildren(
+    ...(clues.length ? clues : ["No clues yet."]).map((clue) => {
+      const line = document.createElement("li");
+      line.textContent = clue;
+      return line;
+    }),
+  );
+}
+
+function render(state: EscapeSnapshot) {
+  if (snapshot?.attempt !== state.attempt) {
+    selectStation("note");
+    setDrawer(false);
+  }
+  snapshot = state;
+  const encounter = state.ghostSeconds !== null;
+  const active = state.phase === "running";
+  if ((!active || encounter) && inspection.open) inspection.close();
+  if (encounter) setDrawer(false);
+  ghost.hidden = !encounter;
+  if (!encounter) holding = false;
+  element("ghost-clock").textContent = `${state.ghostSeconds ?? 0}s to repel it`;
+  avatars.forEach((avatar, index) => {
     const patient = state.patients.find((entry) => entry.slot === index + 1);
     avatar.hidden = !patient;
     avatar.dataset.station = patient?.station ?? "spawn";
     avatar.dataset.local = String(patient?.id === room?.sessionId);
-  }
-}
-
-function render(state: EscapeSnapshot) {
-  if (snapshot && snapshot.attempt !== state.attempt) {
-    selected = "note";
-    showArea("ward");
-    for (const button of stationButtons) button.dataset.selected = "false";
-  }
-  snapshot = state;
-  renderPatients(state);
-  const active = state.phase === "running";
+    const meter = meters[index];
+    if (meter) meter.value = ((patient?.resistance ?? 0) * tickMs) / 1000;
+  });
   restart.hidden = state.phase !== "failed" && state.phase !== "escaped";
-  restart.disabled = state.players !== 2;
-  if (!active && inspection.open) inspection.close();
-  const seconds = String(state.seconds % 60).padStart(2, "0");
-  timer.textContent = state.phase === "escaped" ? "FREE" : `0${Math.floor(state.seconds / 60)}:${seconds}`;
-  round.textContent = `Attempt ${state.attempt} · ${state.players}/2 patients`;
-  game.dataset.danger = String(active && state.seconds <= 10);
+  restart.disabled = state.patients.length !== 2;
   game.dataset.phase = state.phase;
-  roomActions.disabled = !active;
-  const relay = state.cabinetOpen && state.patients.find((patient) => patient.station === "cabinet");
-  const partnerAtRelay =
-    state.cabinetOpen &&
-    state.patients.some((patient) => patient.id !== room?.sessionId && patient.station === "cabinet");
-  relayStatus.textContent = state.terminalUnlocked
-    ? "Exit contacts unlocked."
-    : partnerAtRelay
-      ? "Relay live. Enter the access code."
-      : relay
-        ? "You are powering the terminal. Stay here while your partner enters the code."
-        : "Relay offline. One player must stay at the open cabinet.";
-  password.disabled = !active || !partnerAtRelay || state.terminalUnlocked;
-  submitPassword.disabled = password.disabled;
-  if (password.disabled) password.value = "";
-  inventory.textContent = state.hasKey ? "Rusted key" : "Empty";
+  game.dataset.danger = String(active && state.seconds <= 10);
+  roomActions.disabled = !active || encounter;
+  drawerToggle.disabled = encounter;
+  const seconds = String(state.seconds % 60).padStart(2, "0");
+  element("timer").textContent =
+    state.phase === "escaped" ? "FREE" : `0${Math.floor(state.seconds / 60)}:${seconds}`;
+  element("round").textContent = `Attempt ${state.attempt} · ${state.patients.length}/2 patients`;
   if (status.textContent !== state.message) status.textContent = state.message;
-  const nextNotebookKey = JSON.stringify([active, state.clues]);
-  if (nextNotebookKey === notebookKey) return;
-  notebookKey = nextNotebookKey;
-  notebook.replaceChildren();
-  for (const clue of state.clues) {
-    const line = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = clueTitles[clue];
-    button.disabled = !active;
-    button.addEventListener("click", () => showEvidence(clue));
-    line.append(button);
-    notebook.append(line);
-  }
-  if (!state.clues.length) {
-    const line = document.createElement("li");
-    line.textContent = "Nothing written yet.";
-    notebook.append(line);
-  }
+  renderDrawer(state);
+  if (inspection.open) renderInspection(state);
 }
 
-async function connect(roomId?: string) {
+async function connect(id?: string) {
   create.disabled = true;
   join.disabled = true;
-  status.textContent = "Listening for the ward…";
   try {
-    const connected = roomId ? await client.joinById(roomId) : await client.create(escapeRoomName);
+    const connected = id ? await client.joinById(id) : await client.create(escapeRoomName);
     room = connected;
     connected.onMessage("snapshot", render);
     connected.onLeave(() => {
       room = undefined;
       snapshot = undefined;
+      holding = false;
       if (inspection.open) inspection.close();
       game.hidden = true;
       lobby.hidden = false;
@@ -194,8 +261,15 @@ async function connect(roomId?: string) {
   }
 }
 
-function send(action: EscapeAction) {
-  room?.send("action", action);
+function resist(pressed: boolean) {
+  if (holding === pressed) return;
+  holding = pressed;
+  send({ type: "ward-off", pressed });
+}
+
+function move(station: Station) {
+  selectStation(station);
+  send({ type: "move", station });
 }
 
 create.addEventListener("click", () => void connect());
@@ -204,27 +278,60 @@ lobby.addEventListener("submit", (event) => {
   if (code.value.trim()) void connect(code.value.trim());
 });
 roomCode.addEventListener("focus", () => roomCode.select());
-showArea("ward");
-wardView.addEventListener("click", () => selectStation("note"));
-securityView.addEventListener("click", () => selectStation("photo"));
-flipPhoto.addEventListener("click", () => {
-  send({ type: "flip-photo" });
-  showEvidence("photo");
-  element<HTMLButtonElement>("#close-inspection").focus();
-});
+wardView.addEventListener("click", () => move("note"));
+securityView.addEventListener("click", () => move("photo"));
 restart.addEventListener("click", () => send({ type: "restart" }));
-for (const [index, button] of stationButtons.entries()) {
-  const station = stationOrder[index];
+drawerToggle.addEventListener("click", () => setDrawer(drawer.hidden));
+element("close-drawer").addEventListener("click", () => {
+  setDrawer(false);
+  drawerToggle.focus();
+});
+inspectInventory.addEventListener("click", () => {
+  inspection.close();
+  setDrawer(true);
+  element("close-drawer").focus();
+});
+collect.addEventListener("click", () => {
+  if (pickup) send({ type: "collect", item: pickup });
+});
+lock.addEventListener("submit", (event) => {
+  event.preventDefault();
+  send({ type: "code", code: lockCode.value });
+});
+element("fullscreen").addEventListener("click", () => {
+  const change = document.fullscreenElement ? document.exitFullscreen() : app.requestFullscreen();
+  void change.catch(() => {
+    status.textContent = "Fullscreen is unavailable in this browser.";
+  });
+});
+for (const button of stationButtons) {
+  const station = stations.find((entry) => entry === button.dataset.target);
   if (station) button.addEventListener("click", () => inspect(station));
 }
+holdGhost.addEventListener("pointerdown", (event) => {
+  holdGhost.setPointerCapture(event.pointerId);
+  resist(true);
+});
+holdGhost.addEventListener("lostpointercapture", () => resist(false));
+window.addEventListener("blur", () => resist(false));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) resist(false);
+});
+document.addEventListener("keyup", (event) => {
+  if (event.code === "KeyE") resist(false);
+});
 document.addEventListener("keydown", (event) => {
-  if (snapshot?.phase !== "running" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
-  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-  if (inspection.open) {
-    if (event.key.toLowerCase() === "e") inspection.close();
+  if (snapshot?.phase !== "running" || event.altKey || event.ctrlKey || event.metaKey) return;
+  if (snapshot.ghostSeconds !== null) {
+    if (event.code === "KeyE") {
+      event.preventDefault();
+      resist(true);
+    }
     return;
   }
-  if (event.key.toLowerCase() === "e") {
+  if (event.repeat || event.target instanceof HTMLInputElement) return;
+  if (inspection.open) return;
+  if (event.code === "KeyE") {
     event.preventDefault();
     inspect(selected);
     return;
@@ -232,16 +339,12 @@ document.addEventListener("keydown", (event) => {
   let index = /^[1-6]$/.test(event.key) ? Number(event.key) - 1 : -1;
   if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
     const step = event.key === "ArrowRight" ? 1 : -1;
-    index = (stationOrder.indexOf(selected) + step + stationOrder.length) % stationOrder.length;
+    index = (stations.indexOf(selected) + step + stations.length) % stations.length;
   }
-  const station = stationOrder[index];
+  const station = stations[index];
   if (station) {
     event.preventDefault();
-    selectStation(station);
+    move(station);
   }
 });
-terminal.addEventListener("submit", (event) => {
-  event.preventDefault();
-  send({ type: "password", code: password.value });
-  password.select();
-});
+selectStation("note");
