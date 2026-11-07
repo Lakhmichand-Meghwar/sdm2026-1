@@ -8,8 +8,10 @@ import { Client, type Room } from "@colyseus/sdk";
 import {
   type BuildInfo,
   buildInviteLink,
+  createBugReporter,
   createDebugOverlay,
   createFrameMeter,
+  createLogBuffer,
   normalizeRoomCode,
   readClientParams,
 } from "@sdm/core/client";
@@ -33,9 +35,16 @@ const ROOM_NAME = "game";
 const TOKEN_KEY = "sdm:reconnectionToken";
 const CODE_KEY = "sdm:roomCode";
 
+/** F8 bug reports open a pre-filled issue here, labelled with this team. Teams set their own label. */
+const ISSUE_REPO = "nd2003/sdm2026-1";
+const TEAM_LABEL = "platform";
+
 const app = document.getElementById("app") as HTMLElement;
 const params = readClientParams(location.search);
 const client = new Client(SERVER_URL);
+// Recent console output goes into F8 bug reports.
+const logs = createLogBuffer();
+logs.captureConsole();
 
 async function main(): Promise<void> {
   const health = HealthResponseSchema.parse(await (await fetch(`${SERVER_URL}${Routes.health}`)).json());
@@ -96,6 +105,27 @@ function play(room: Room<SampleState>, health: BuildInfo): void {
   const hud = app.querySelector("#hud") as HTMLElement;
   const canvas = app.querySelector("#view") as HTMLCanvasElement;
   const ctx = canvas.getContext("2d") as CanvasRenderingContext2D;
+
+  // F8: screenshot + logs + room details → saved on the server, with a link to a pre-filled issue.
+  createBugReporter({
+    serverUrl: SERVER_URL,
+    issueRepo: ISSUE_REPO,
+    teamLabel: TEAM_LABEL,
+    logs,
+    getCanvas: () => canvas,
+    getContext: () => ({
+      game: templateGame.id,
+      build: health,
+      roomId: room.roomId,
+      roomCode: room.state.code || null,
+      playerId: room.sessionId,
+      tick: room.state.tick,
+      scenario: params.scenario,
+      net: null,
+      url: location.href,
+      userAgent: navigator.userAgent,
+    }),
+  });
 
   const keys = new Set<string>();
   addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
