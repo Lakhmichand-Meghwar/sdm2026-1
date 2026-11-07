@@ -2400,6 +2400,58 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.3em;
 }
+.lobby-time {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.lobby-time legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.lobby-time-note {
+  opacity: 0.7;
+}
+.time-options {
+  display: flex;
+  gap: 8px;
+}
+.time-option {
+  flex: 1;
+  position: relative;
+}
+.time-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.time-option-label {
+  display: block;
+  padding: 9px 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hud-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 160ms,
+    color 160ms,
+    border-color 160ms;
+}
+.time-option-label:hover {
+  color: var(--text);
+}
+.time-option input:checked + .time-option-label {
+  color: var(--text);
+  background: var(--accent-dim);
+  border-color: rgba(184, 136, 48, 0.6);
+}
+.time-option input:focus-visible + .time-option-label {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .lobby-actions {
   display: flex;
   gap: 12px;

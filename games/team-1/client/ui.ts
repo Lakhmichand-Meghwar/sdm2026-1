@@ -75,6 +75,32 @@ export function setLobbyCode(code: string): void {
   el<HTMLInputElement>("lobby-code").value = code;
 }
 
+/** Builds the loop time choice from the config, with `selected` checked. */
+export function renderLoopTimes(times: readonly number[], selected: number): void {
+  const box = el("lobby-time");
+  box.replaceChildren(
+    ...times.map((seconds) => {
+      const label = document.createElement("label");
+      label.className = "time-option";
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "lobby-time";
+      input.value = String(seconds);
+      input.checked = seconds === selected;
+      const text = document.createElement("span");
+      text.className = "time-option-label";
+      text.textContent = `${seconds}s`;
+      label.append(input, text);
+      return label;
+    }),
+  );
+}
+
+export function getLoopTime(): number | undefined {
+  const checked = document.querySelector<HTMLInputElement>('input[name="lobby-time"]:checked');
+  return checked ? Number(checked.value) : undefined;
+}
+
 export function setLobbyError(text: string): void {
   setText("lobby-error", text);
 }

@@ -1,5 +1,5 @@
 /** Turns the room state into UI. Called on every state patch, so everything here is idempotent. */
-import { timeLoopGame } from "../shared/game.ts";
+import { levelDuration, timeLoopGame } from "../shared/game.ts";
 import type { GameEvent, TimeLoopState } from "../shared/index.ts";
 import { CODE_DIGITS, type CodeKind, LEVEL_COUNT, levelInfo, ROLE_SOLO, ROLE_TEXT } from "../shared/rules.ts";
 import { currentInviteLink } from "./invite.ts";
@@ -102,7 +102,7 @@ function partnerAway(state: TimeLoopState, sessionId: string): boolean {
 
 function renderRoom(state: TimeLoopState, me: number): void {
   const level = state.level;
-  const duration = config.levels[level - 1]?.duration ?? 60;
+  const duration = levelDuration(config, state.loopTime, level);
   ui.setLevel(levelInfo(level));
   ui.setTimer(state.timeLeft, duration);
   ui.setLoop(state.loop);
@@ -156,7 +156,7 @@ export function render(state: TimeLoopState, sessionId: string): void {
       ui.setBrief(
         levelInfo(state.level),
         LEVEL_COUNT,
-        config.levels[state.level - 1]?.duration ?? 60,
+        levelDuration(config, state.loopTime, state.level),
         penalty,
         state.previous,
         state.solo ? levelInfo(state.level).soloRule : levelInfo(state.level).rule,
