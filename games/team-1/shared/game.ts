@@ -154,6 +154,9 @@ function beginLevel(ctx: Ctx, level: number, previous: string): void {
   s.subTick = 0;
   s.readyMask = 0;
   s.previous = previous;
+  s.held = false;
+  s.heldBy = "";
+  s.heldSlot = 0;
   s.phase = "briefing";
 }
 
@@ -163,7 +166,44 @@ function newGame(ctx: Ctx): void {
   s.clues2.clear();
   s.resets = 0;
   s.finalTime = 0;
+  s.endedBy = "";
+  s.endedSlot = 0;
+  s.endedAt = "";
   beginLevel(ctx, 1, "");
+}
+
+/** Phases a game can be ended from. It can only be paused while a room is being played. */
+const ACTIVE_PHASES = new Set(["briefing", "playing", "resetting"]);
+
+function pauseGame(ctx: Ctx, slot: Slot): void {
+  const s = ctx.state;
+  if (s.phase !== "playing" || s.held) return;
+  s.held = true;
+  s.heldBy = nameOf(ctx, slot);
+  s.heldSlot = slot;
+  say(ctx, "info", `${s.heldBy} paused the game.`);
+}
+
+function resumeGame(ctx: Ctx, slot: Slot): void {
+  const s = ctx.state;
+  if (!s.held) return;
+  s.held = false;
+  s.heldBy = "";
+  s.heldSlot = 0;
+  say(ctx, "info", `${nameOf(ctx, slot)} resumed the game.`);
+}
+
+/** Stops the game for everyone. Play again (`restart`) starts a new one in the same room. */
+function endGame(ctx: Ctx, slot: Slot): void {
+  const s = ctx.state;
+  if (!ACTIVE_PHASES.has(s.phase)) return;
+  s.held = false;
+  s.heldBy = "";
+  s.heldSlot = 0;
+  s.endedBy = nameOf(ctx, slot);
+  s.endedSlot = slot;
+  s.endedAt = `${levelInfo(s.level).name}, loop ${s.loop}`;
+  s.phase = "ended";
 }
 
 function completeLevel(ctx: Ctx): void {
@@ -198,6 +238,7 @@ function penalize(ctx: Ctx): number {
 function tickClock(ctx: Ctx): void {
   const s = ctx.state;
   if (s.phase === "playing") {
+    if (s.held) return;
     // The clock only runs while every detective is connected.
     if (activeDetectives(ctx) < requiredDetectives(ctx)) return;
     s.subTick += 1;
@@ -551,10 +592,21 @@ function handle(ctx: Ctx, playerId: string, input: TimeLoopInput): void {
   const player = s.players.get(playerId);
   if (!player || (player.slot !== 1 && player.slot !== 2)) return;
   const slot: Slot = player.slot;
+  // A paused room only listens for resume and end.
+  const live = s.phase === "playing" && !s.held;
 
   switch (input.type) {
+    case "pause":
+      pauseGame(ctx, slot);
+      return;
+    case "resume":
+      resumeGame(ctx, slot);
+      return;
+    case "end":
+      endGame(ctx, slot);
+      return;
     case "share":
-      if (s.phase === "playing" && !s.solo) shareClue(ctx, slot, input.clue);
+      if (live && !s.solo) shareClue(ctx, slot, input.clue);
       return;
     case "ready":
       if (s.phase !== "briefing") return;
@@ -562,13 +614,16 @@ function handle(ctx: Ctx, playerId: string, input: TimeLoopInput): void {
       if (s.readyMask === (s.solo ? 1 : 3)) s.phase = "playing";
       return;
     case "restart":
-      if (s.phase === "won") newGame(ctx);
+      if (s.phase !== "won" && s.phase !== "ended") return;
+      newGame(ctx);
+      // The partner went back to the lobby: wait for someone to join before the briefing.
+      if (s.players.size < requiredDetectives(ctx)) s.phase = "waiting";
       return;
     case "code":
-      if (s.phase === "playing") submitCode(ctx, slot, input.kind, input.value);
+      if (live) submitCode(ctx, slot, input.kind, input.value);
       return;
     case "interact":
-      if (s.phase === "playing") interact(ctx, slot, input.target);
+      if (live) interact(ctx, slot, input.target);
       return;
   }
 }

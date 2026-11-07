@@ -63,7 +63,10 @@
         </div>
         <p class="brief-rule" id="brief-rule"></p>
         <p class="brief-role" id="brief-role"></p>
-        <button type="button" class="btn-primary" id="brief-go">Enter the room</button>
+        <div class="lobby-actions">
+          <button type="button" class="btn-primary" id="brief-go">Enter the room</button>
+          <button type="button" class="btn-secondary" id="brief-end">End game</button>
+        </div>
         <p class="brief-wait hidden" id="brief-wait">Waiting for your partner to be ready</p>
       </div>
     </div>
@@ -117,6 +120,39 @@
       </div>
     </div>
 
+    <div id="screen-paused" class="fullscreen hidden overlay">
+      <div class="wait-inner">
+        <h2 class="lobby-title">Paused</h2>
+        <p class="wait-text" id="paused-text">The clock is stopped.</p>
+        <div class="lobby-actions">
+          <button type="button" class="btn-primary" id="paused-resume">Resume</button>
+          <button type="button" class="btn-secondary" id="paused-end">End game</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirm-end" class="fullscreen hidden overlay confirm-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-end-title">
+      <div class="wait-inner">
+        <h2 class="lobby-title" id="confirm-end-title">End this game?</h2>
+        <p class="wait-text" id="confirm-end-text">The game ends for both of you. Your clues and progress are lost.</p>
+        <div class="lobby-actions">
+          <button type="button" class="btn-primary btn-danger" id="confirm-end-yes">End game</button>
+          <button type="button" class="btn-secondary" id="confirm-end-no">Keep playing</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-ended" class="fullscreen hidden">
+      <div class="win-inner">
+        <div class="win-title ended-title">Game ended</div>
+        <p class="win-msg" id="ended-msg"></p>
+        <div class="lobby-actions ended-actions">
+          <button type="button" class="btn-primary" id="ended-restart">Play again</button>
+          <button type="button" class="btn-secondary" id="ended-lobby">Back to lobby</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── GAME SCREEN ── -->
     <div id="screen-game" class="fullscreen hidden">
       <!-- TOP BAR -->
@@ -140,6 +176,10 @@
           <div id="loop-badge" class="loop-badge">Loop <span id="loop-num">1</span></div>
           <div id="timer-box" class="timer-box">
             <span id="timer-display">01:30</span>
+          </div>
+          <div class="game-controls">
+            <button type="button" class="btn-mini hidden" id="btn-pause">Pause</button>
+            <button type="button" class="btn-mini btn-mini-danger hidden" id="btn-end">End game</button>
           </div>
         </div>
       </header>

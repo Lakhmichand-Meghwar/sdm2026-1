@@ -2612,3 +2612,52 @@ button:disabled {
 .btn-mini:hover {
   background: rgba(184, 136, 48, 0.12);
 }
+
+/* ── pause and end game ──────────────────────────────────────────────────── */
+.game-controls {
+  display: flex;
+  gap: 6px;
+}
+.btn-mini-danger {
+  color: var(--danger);
+  border-color: rgba(192, 56, 40, 0.5);
+}
+.btn-mini-danger:hover {
+  background: rgba(192, 56, 40, 0.12);
+}
+.btn-danger {
+  background: var(--danger);
+  color: var(--text);
+}
+.btn-danger:hover {
+  background: #d04a38;
+}
+/* Above the paused overlay, so End game can be confirmed from there too. */
+.confirm-backdrop {
+  z-index: 300;
+  background: rgba(10, 8, 6, 0.92);
+}
+.ended-title {
+  color: var(--warn);
+}
+.ended-actions {
+  justify-content: center;
+}
+/* Narrow screens: make room in the top bar for Pause and End game. */
+@media (max-width: 1100px) {
+  #top-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 0 12px;
+  }
+  .top-title {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  #level-badge {
+    display: none;
+  }
+  .top-right {
+    gap: 6px;
+  }
+}

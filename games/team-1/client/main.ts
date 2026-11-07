@@ -228,6 +228,30 @@ document.addEventListener("DOMContentLoaded", () => {
   bind("brief-go", () => send({ type: "ready" }));
   bind("btn-restart", () => send({ type: "restart" }));
 
+  bind("btn-pause", () => send({ type: "pause" }));
+  bind("paused-resume", () => send({ type: "resume" }));
+  for (const id of ["btn-end", "paused-end", "brief-end"]) {
+    bind(id, () => ui.openConfirmEnd(room?.state.solo === true));
+  }
+  bind("confirm-end-no", ui.closeConfirmEnd);
+  bind("confirm-end-yes", () => {
+    ui.closeConfirmEnd();
+    send({ type: "end" });
+  });
+  document.getElementById("confirm-end")?.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key === "Escape") ui.closeConfirmEnd();
+  });
+  bind("ended-restart", () => send({ type: "restart" }));
+  bind("ended-lobby", () => {
+    // Clear `room` first so its onLeave doesn't show "Connection lost" for a leave we asked for.
+    const leaving = room;
+    room = null;
+    void leaving?.leave();
+    safe(() => sessionStorage.removeItem(TOKEN_KEY));
+    ui.setOverlay(null);
+    showLobby();
+  });
+
   bind("lost-retry", () => void retryConnection());
   bind("lost-lobby", () => {
     room = null;
