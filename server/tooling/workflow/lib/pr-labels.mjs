@@ -1,6 +1,8 @@
 // Which status labels a pull request should carry: stackpile and one waiting-on.* label. Pure: the
 // caller passes the PR's data from GitHub, so every rule is unit-tested. See "Labels" in CLAUDE.md.
 
+import { latestDecisions } from "./check-review.mjs";
+
 /** Bases that are not another PR: a PR into anything else is stacked on that PR. */
 const LONG_LIVED = /^(main|prod|feature\/team-[1-4])$/;
 
@@ -31,12 +33,7 @@ export const isStacked = (base) => !LONG_LIVED.test(base);
  * @param {Pick<PullRequest, "isDraft" | "author" | "reviews" | "unresolvedThreads">} pr
  */
 export function waitingOn(pr) {
-  /** @type {Map<string, string>} */
-  const latest = new Map();
-  for (const r of pr.reviews) {
-    if (!r.author || r.author === pr.author) continue;
-    if (["APPROVED", "CHANGES_REQUESTED", "DISMISSED"].includes(r.state)) latest.set(r.author, r.state);
-  }
+  const latest = latestDecisions(pr.author, pr.reviews);
   const states = [...latest.values()];
   if (pr.isDraft || states.includes("CHANGES_REQUESTED") || pr.unresolvedThreads > 0) return "author";
   if (!states.includes("APPROVED")) return "review";

@@ -1,8 +1,11 @@
 /**
- * Railway infrastructure for sdm2026-1: one project, two environments, one service per game.
+ * Railway infrastructure for sdm2026-1: one project, two environments, one service per game plus the gateway.
  *
  *   production   deploys `prod` (release PRs from main only)
  *   development  deploys `main`
+ *
+ * The gateway is the only service with a public domain. It serves every game at `<address>/<game>` and
+ * reaches each one over Railway's private network, so all teams run side by side from the same branch.
  *
  * Change it through a reviewed platform PR that includes the `railway config plan` output for both
  * environments, then apply from an up-to-date `main` (see "Railway" in server/ARCHITECTURE.md).
@@ -48,6 +51,15 @@ export const GAMES: readonly Game[] = [
   { service: "template", dir: "server/template", package: "@sdm/template" },
 ];
 
+/** Teams that get a path on the gateway even before their game is in `GAMES` (the index lists them as "not released yet"). */
+const TEAMS = ["team-1", "team-2", "team-3", "team-4"];
+
+/** Railway service name of the gateway. */
+export const GATEWAY = "gateway";
+
+/** Names a game cannot have: the gateway's own service, and the one path it answers itself (`/health`). */
+const RESERVED = [GATEWAY, "health"];
+
 /** Platform files every game runs on: a change here redeploys every game. */
 const PLATFORM_WATCH = [
   "/server/core/**",
@@ -64,7 +76,12 @@ const PLATFORM_WATCH = [
 const NEVER_WATCH = ["!**/*.md", "!**/*.test.ts"];
 
 /** Fail the plan early, with a clear message, instead of deploying a service that can't start. */
-function checkGame(game: Game): Game {
+export function checkGame(game: Game): Game {
+  if (RESERVED.includes(game.service)) {
+    throw new Error(
+      `Game "${game.service}": the name is reserved (${RESERVED.join(", ")}): the gateway uses it for itself.`,
+    );
+  }
   const dir = new URL(`../${game.dir}/`, import.meta.url);
   const pkgFile = new URL("package.json", dir);
   if (!existsSync(pkgFile) || !existsSync(new URL("server.ts", dir))) {
@@ -116,6 +133,45 @@ function gameService(game: Game, env: (typeof ENVIRONMENTS)[EnvironmentName]) {
   });
 }
 
+/** The public front: `<address>/<game>/` goes to that game's service, WebSockets included. */
+function gatewayService(env: (typeof ENVIRONMENTS)[EnvironmentName]) {
+  const dir = "server/gateway";
+  const pkgFile = new URL(`../${dir}/package.json`, import.meta.url);
+  if (!existsSync(pkgFile) || !existsSync(new URL(`../${dir}/server.ts`, import.meta.url))) {
+    throw new Error(`The gateway: ${dir} needs a package.json and a server.ts.`);
+  }
+  const games = GAMES.map((game) => game.service);
+  return service(GATEWAY, {
+    source: github(REPO, { branch: env.branch, checkSuites: true }),
+    build: {
+      builder: "RAILPACK",
+      // Nothing to bundle: the gateway runs from source. The build step only fails the deploy on a type error.
+      buildCommand: "pnpm --filter @sdm/gateway typecheck",
+      watchPatterns: [`/${dir}/**`, ...PLATFORM_WATCH, ...NEVER_WATCH],
+    },
+    start: `node --import tsx ${dir}/server.ts`,
+    healthcheck: "/health",
+    healthcheckTimeout: 60,
+    // One replica ("Keep it small" in CLAUDE.md). The gateway keeps no state, so adding one later is safe.
+    replicas: { [REGION]: 1 },
+    deploy: {
+      restartPolicyType: "ON_FAILURE",
+      restartPolicyMaxRetries: 5,
+      drainingSeconds: 15,
+      sleepApplication: false,
+    },
+    env: {
+      APP_ENV: env.appEnv,
+      PORT,
+      // The games' port is the one they listen on (PORT above): one value, so changing it cannot leave the
+      // gateway calling a port nobody listens on.
+      UPSTREAM_PORT: PORT,
+      GAMES: games.join(","),
+      PLANNED_GAMES: TEAMS.filter((team) => !games.includes(team)).join(","),
+    },
+  });
+}
+
 export default defineRailway((ctx) => {
   const name = ctx.environment ?? "";
   if (!Object.hasOwn(ENVIRONMENTS, name)) {
@@ -125,5 +181,7 @@ export default defineRailway((ctx) => {
     );
   }
   const env = ENVIRONMENTS[name as EnvironmentName];
-  return project(PROJECT, { resources: GAMES.map((game) => gameService(checkGame(game), env)) });
+  return project(PROJECT, {
+    resources: [gatewayService(env), ...GAMES.map((game) => gameService(checkGame(game), env))],
+  });
 });

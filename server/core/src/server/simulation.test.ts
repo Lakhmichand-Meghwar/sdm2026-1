@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import type { JoinInfo } from "../sim/index.ts";
+import { guestFingerprint } from "./guest.ts";
 import { Simulation } from "./simulation.ts";
 import { stateHash } from "./stateHash.ts";
 import { makeCounterGame } from "./testing/counterGame.ts";
 
-function newSim(opts: { maxEvents?: number } = {}) {
-  return new Simulation(makeCounterGame(), {
+const RAW_GUEST = "0b7e6f3a-1c2d-4e5f-9a8b-7c6d5e4f3a2b";
+
+function newSim(opts: { maxEvents?: number } = {}, def = makeCounterGame()) {
+  return new Simulation(def, {
     seed: 42,
     roomId: "r1",
     sha: "test",
@@ -92,10 +97,64 @@ describe("Simulation", () => {
     const replay = sim.snapshot();
     expect(replay.config).toEqual(makeCounterGame().config);
     expect(replay.events).toEqual([
-      { type: "join", tick: 0, playerId: "p1", options: { name: "Ada" } },
+      { type: "join", tick: 0, playerId: "p1", options: { name: "Ada" }, guest: "" },
       { type: "leave", tick: 1, playerId: "p1" },
     ]);
     expect(replay.final).toEqual({ tick: 1, stateHash: stateHash(sim.state) });
+  });
+});
+
+describe("Simulation guests", () => {
+  it("puts the fingerprint on the seat and passes it to the game's join", () => {
+    const seen: JoinInfo[] = [];
+    const def = makeCounterGame({
+      join(_ctx, _playerId, _options, info) {
+        seen.push(info);
+      },
+    });
+    const sim = newSim({}, def);
+    const guest = guestFingerprint("counter", RAW_GUEST);
+    sim.join("p1", { name: "Ada" }, guest);
+    expect(sim.state.seats.get("p1")?.guest).toBe(guest);
+    expect(seen).toEqual([{ guest }]);
+  });
+
+  it("strips guestId before the game's join schema sees it, even a strict one", () => {
+    const seen: Record<string, unknown>[] = [];
+    const def = makeCounterGame({
+      joinOptionsSchema: z.strictObject({ name: z.string().default("p") }),
+      join(_ctx, _playerId, options) {
+        seen.push(options);
+      },
+    });
+    const sim = newSim({}, def);
+    sim.join("p1", { name: "Ada", guestId: RAW_GUEST }, guestFingerprint("counter", RAW_GUEST));
+    expect(seen).toEqual([{ name: "Ada" }]);
+  });
+
+  it("never puts the raw guest ID in the state or the replay", () => {
+    const sim = newSim();
+    sim.join("p1", { name: "Ada", guestId: RAW_GUEST }, guestFingerprint("counter", RAW_GUEST));
+    sim.tick();
+    const replay = sim.snapshot();
+    expect(replay.events[0]).toMatchObject({ type: "join", guest: guestFingerprint("counter", RAW_GUEST) });
+    expect(JSON.stringify(replay)).not.toContain(RAW_GUEST);
+    expect(JSON.stringify(sim.state.toJSON())).not.toContain(RAW_GUEST);
+  });
+
+  it('a join without a guest works, with guest ""', () => {
+    const sim = newSim();
+    sim.join("p1", { name: "Ada" });
+    sim.join("p2", { name: "Bo", guestId: "not-a-uuid" });
+    expect(sim.state.seats.get("p1")?.guest).toBe("");
+    expect(sim.state.seats.get("p2")?.guest).toBe("");
+    expect(sim.snapshot().events.map((e) => (e.type === "join" ? e.guest : null))).toEqual(["", ""]);
+  });
+
+  it("refuses a guest value that isn't a fingerprint, so a raw ID can't be recorded by mistake", () => {
+    const sim = newSim();
+    expect(() => sim.join("p1", {}, RAW_GUEST)).toThrow(/fingerprint/);
+    expect(sim.state.seats.size).toBe(0);
   });
 });
 

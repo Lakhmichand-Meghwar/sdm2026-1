@@ -1,8 +1,9 @@
 # Keeps every pull request's status labels up to date (pnpm labels:prs, issues #97/#98):
 # stackpile and one of waiting-on.author / .review / .merge. See "Labels" in CLAUDE.md.
 #
-# - Every 10 minutes (GitHub may delay scheduled runs by a few minutes), and on demand: all PRs.
-# - On PR and review events: just that PR, so labels change within a minute.
+# Every run labels all PRs (a full pass costs about one GitHub query per 50 PRs): on every PR and review
+# event, so labels change within a minute everywhere, every 10 minutes, and on demand. Scheduled runs alone
+# are not enough: GitHub can delay or skip them for a long time (issue #216).
 #
 # Security: pull_request_target runs this workflow as it is on main, with a token that can write labels,
 # also for PRs from forks. It checks out main (the default for pull_request_target), never the PR's code,
@@ -19,8 +20,10 @@ on:
   pull_request_review:
     types: [submitted, edited, dismissed]
 
+# One queue for every trigger: a newer run supersedes a running one, so a burst of events ends with one
+# full, up-to-date pass.
 concurrency:
-  group: pr-labels-${{ github.event.pull_request.number || 'all' }}
+  group: pr-labels
   cancel-in-progress: true
 
 permissions:
@@ -33,7 +36,7 @@ jobs:
     name: update PR labels
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # A review on a fork's PR only gets a read-only token; the next scheduled run labels it instead.
+    # A review on a fork's PR only gets a read-only token; the next run from any other event labels it instead.
     if: github.event_name != 'pull_request_review' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -42,15 +45,9 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      # The labeller has no dependencies, so there is no install step. The PR number comes from the
-      # event through an env var, never from the PR's own text.
+      # The labeller has no dependencies, so there is no install step. It reads nothing from the event:
+      # every run labels all open PRs (and clears status labels from closed ones).
       - name: Update labels
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          if [ -n "$PR_NUMBER" ]; then
-            node server/tooling/workflow/pr-labels.mjs --number "$PR_NUMBER"
-          else
-            node server/tooling/workflow/pr-labels.mjs
-          fi
+        run: node server/tooling/workflow/pr-labels.mjs

@@ -26,16 +26,16 @@ Every issue and pull request carries exactly one team label:
 
 ## Project boards
 
-Every team has its own GitHub Project with the issues and pull requests that carry its label. Issues and PRs are added to the boards by their team label, so label your work correctly.
+Every team has its own GitHub Project with the issues and pull requests that carry its label. The boards are also listed on the repository's **Projects** tab. Issues and PRs are added to the boards by their team label, so label your work correctly.
 
 | Board | Contents |
 |---|---|
-| [team-1](https://github.com/users/ferenc-munde/projects/3) | issues and PRs labeled `team-1` |
-| [team-2](https://github.com/users/ferenc-munde/projects/4) | issues and PRs labeled `team-2` |
-| [team-3](https://github.com/users/ferenc-munde/projects/5) | issues and PRs labeled `team-3` |
-| [team-4](https://github.com/users/ferenc-munde/projects/6) | issues and PRs labeled `team-4` |
-| [platform](https://github.com/users/ferenc-munde/projects/7) | issues and PRs labeled `platform` |
-| [All teams](https://github.com/users/ferenc-munde/projects/8) | every issue and PR; filter by team with `label:team-2` etc. |
+| [team-1](https://github.com/users/nd2003/projects/2) | issues and PRs labeled `team-1` |
+| [team-2](https://github.com/users/nd2003/projects/3) | issues and PRs labeled `team-2` |
+| [team-3](https://github.com/users/nd2003/projects/4) | issues and PRs labeled `team-3` |
+| [team-4](https://github.com/users/nd2003/projects/5) | issues and PRs labeled `team-4` |
+| [platform](https://github.com/users/nd2003/projects/6) | issues and PRs labeled `platform` |
+| [All teams](https://github.com/users/nd2003/projects/7) | every issue and PR; filter by team with `label:team-2` etc. |
 
 ## Tracking progress
 
@@ -88,7 +88,58 @@ Sync and release PRs (from `main`) and integration PRs (`feature/team-N` into `m
 
 **During the hackathon:** run `node course/tooling/pr-report.mjs --state open --failing` now and then, and fix what it lists (edit the PR description, add the label, retarget the base branch). Commits that are already pushed don't have to be rewritten; reference the issue in the next ones.
 
-**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. PRs merged before a rule existed (for example, titles like `[team-2] Add login` from before the commit format, or a checklist from before it grew to ten items) fail that rule; take that into account when weighting the result. The report still attributes such PRs to their team through the old `[team-N]` prefix.
+**For the evaluation:** run `node course/tooling/pr-report.mjs` once at the end and hand the report (or the `--json` output) to the evaluator together with the issues, PRs and commits. PRs merged before a rule existed (for example, a checklist from before it grew to ten items) fail that rule; take that into account when weighting the result. The title rule is the exception: PRs opened before the commit format (#86, merged 2026-11-06 14:29 UTC) are judged by the title rule of their time, `[team-2] Add login`, and the report attributes them to their team through that prefix. Only the report makes this exception: `pnpm check:pr` and CI always ask for the commit format, so a PR that is still open needs it before it merges.
+
+#### Fixing PRs automatically
+
+```bash
+node course/tooling/pr-report.mjs --fix            # dry run: what would change, per PR
+node course/tooling/pr-report.mjs --fix --apply    # make the changes on GitHub
+```
+
+`--fix` corrects what can be corrected without guessing, on every PR (`--state` and `--team` narrow it down):
+
+- **Open PRs:** adds the missing team label, fixes the title, restructures the description into its template (existing text is moved under the right heading, never removed), adds `Closes #N` from the branch name, sets `## Team`, appends missing checklist items unticked, and retargets the PR to the right base branch. A PR stacked on another work branch is not retargeted.
+- **Merged and closed PRs:** only what the evaluation needs to credit the work: the team label, the title, the linked issue and the team. Their descriptions otherwise stay as they were written, since they followed the template of their time.
+- **Titles** follow the rule of the time the PR was opened. A conventional title only gets its scope corrected to the team label. An old `[team-2] …` title on a PR opened before conventional titles (#86) stays as it is. A newer title gets the type its commits agree on, and is left alone if they don't agree.
+
+It never ticks checklist items, writes a summary, test steps or screenshots, or touches commits. What only the author can do is listed in one comment per PR. The next run updates that comment instead of posting a new one, and a run after `--apply` changes nothing. Open PRs always get the comment; merged and closed ones only when something was changed on them.
+
+### Checking issue labels and titles
+
+The evaluation attributes work to teams through the team label and the `[<team-label>]` title prefix of the issues. One command lists, per team, which issues break those rules, and why:
+
+```bash
+node course/tooling/issue-report.mjs                  # every issue: open and closed
+node course/tooling/issue-report.mjs --state open     # only open issues (also: closed, all)
+node course/tooling/issue-report.mjs --team team-2    # only one team
+node course/tooling/issue-report.mjs --failing        # leave out the passing issues
+node course/tooling/issue-report.mjs --json           # machine-readable, e.g. as input for an AI evaluator
+```
+
+It needs the [GitHub CLI](https://cli.github.com/), logged in with `gh auth login`. The output is Markdown: a pass/fail table per team, then every failing issue with its labels and problems. Paste it into an issue or a chat, or save it with `node course/tooling/issue-report.mjs > issue-report.md`.
+
+An issue passes when both of these are true (the rules from "Issue first" in [CLAUDE.md](../CLAUDE.md), the same ones `pnpm check:issue` enforces):
+
+- It has **exactly one** team label: `team-1`, `team-2`, `team-3`, `team-4`, `platform` or `team-instructor`. Other labels, such as `bug`, are fine.
+- Its title starts with `[<team-label>]`, and that prefix is the same as the label (`[team-2]` with the label `team-2`).
+
+An issue is listed under its team label. If it has none or several, it is listed under the team named in its title prefix, and under *(no team)* if there is none. The report only looks at the title and the labels, not the description, because older issues were written before the issue templates existed.
+
+**When to run it:** the instructors run `node course/tooling/issue-report.mjs --state open --failing` at the end of each day, and once more without options before the evaluation. Fix what it lists by adding the missing team label or editing the title, or let `--fix` do it; closed issues can be fixed too. Nothing runs automatically, and without `--fix --apply` nothing is posted to the issues.
+
+#### Fixing issues automatically
+
+```bash
+node course/tooling/issue-report.mjs --fix            # dry run: what would change, per issue
+node course/tooling/issue-report.mjs --fix --apply    # make the changes on GitHub
+```
+
+- **Missing team label:** added when the title prefix names a team, also a malformed one such as `[team : 4]` or `[Team 4]`.
+- **Missing or malformed title prefix:** set to `[<team-label>]` when the issue has exactly one team label.
+- **Not fixed:** a prefix that names another team than the label, several team labels, or an issue that names no team at all. Which team is right is for the author to say, so on open issues these are listed in a comment, which the next run updates instead of repeating. Closed issues only get a comment when something was changed on them.
+
+Run the issue fix before the PR fix: the PR report also checks that the linked issue has the same team label.
 
 ### Student activity report
 

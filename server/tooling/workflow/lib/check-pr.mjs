@@ -52,7 +52,8 @@ export function detectPrType(body, templates) {
  *   config: { teamLabels: string[], types?: Record<string, { commitTypes: string[] }> },
  *   templates: Record<string, string>,
  *   classification?: { undecided?: boolean, type?: string, rule?: string } | null,
- * }} input templates: PR type -> template Markdown
+ *   allowLegacyTitle?: boolean,
+ * }} input templates: PR type -> template Markdown; allowLegacyTitle: also accept "[team-label] Summary"
  */
 export function checkPr({
   title,
@@ -64,6 +65,7 @@ export function checkPr({
   config,
   templates,
   classification = null,
+  allowLegacyTitle = false,
 }) {
   const body = rawBody ?? "";
   /** @type {{ rule: string, message: string }[]} */
@@ -73,11 +75,18 @@ export function checkPr({
   const add = (rule, message) => problems.push({ rule, message });
 
   // Title: Conventional Commits like a commit subject, with the team label as the scope,
-  // e.g. "feat(team-2): add login page" (see "Pull request" in CLAUDE.md).
-  const subject = checkSubject(title.trim());
+  // e.g. "feat(team-2): add login page" (see "Pull request" in CLAUDE.md). With allowLegacyTitle,
+  // the earlier "[team-2] Add login page" form is accepted too (for PRs from before the change, #86).
+  const legacy = allowLegacyTitle ? /^\[([^\]]+)\]\s+\S/.exec(title.trim()) : null;
+  const subject = legacy
+    ? { problems: [], type: null, scope: null, breaking: false }
+    : checkSubject(title.trim());
   for (const p of subject.problems) add("title", `Title: ${p.message}`);
   let titleLabel = null;
-  if (subject.type && !subject.scope) {
+  if (legacy) {
+    if (config.teamLabels.includes(legacy[1])) titleLabel = legacy[1];
+    else add("title", `"[${legacy[1]}]" is not a team label. Use one of: ${config.teamLabels.join(", ")}.`);
+  } else if (subject.type && !subject.scope) {
     add("title", `The title needs the team label as its scope, e.g. "${subject.type}(team-2): ...".`);
   } else if (subject.scope && !config.teamLabels.includes(subject.scope)) {
     add(

@@ -12,12 +12,15 @@
 //   --type <type>        decide the type yourself (feature, bug, docs, chore, refactor, release)
 //   --label <label>      decide the team label yourself
 //   --branch <name>      branch name (defaults to the current branch)
+//   --actor <login>      the GitHub account running this (default: `gh api user`); decides who may get team-instructor
 //   --target <branch>    with --kind pr: the branch the PR targets (tells a release from a sync when the head is main)
 //   --json               machine-readable output
 //
 // Exit codes: 0 classified, 1 undecided or invalid, 2 usage error, 3 environment problem (git).
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { EXIT, parseArgs } from "./lib/args.mjs";
+import { guardLabel, loadInstructors } from "./lib/check-instructor.mjs";
 import { branchSubjects, changedFiles, currentBranch } from "./lib/git.mjs";
 import { loadOwnership } from "./lib/ownership.mjs";
 import { classifyChange, strongestSubject } from "./lib/rules.mjs";
@@ -105,6 +108,28 @@ if (!result.undecided && result.ok) {
   if (kind !== "commit" && !result.label) {
     result.ok = false;
     result.errors.push("No team label could be derived. Pass --label.");
+  }
+}
+// The team-instructor label is reserved for the instructors (.github/instructors.json).
+if (result.ok && result.label === "team-instructor") {
+  let actor = typeof flags.actor === "string" ? flags.actor : null;
+  if (!actor) {
+    try {
+      actor = execFileSync("gh", ["api", "user", "--jq", ".login"], {
+        cwd: root,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+    } catch {
+      actor = null;
+    }
+  }
+  const guard = guardLabel({ label: result.label, actor: actor || null, instructors: loadInstructors(root) });
+  if (guard && "error" in guard) {
+    result.ok = false;
+    result.errors.push(guard.error);
+  } else if (guard) {
+    result.warnings.push(guard.warning);
   }
 }
 result.kind = kind;

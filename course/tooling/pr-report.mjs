@@ -9,80 +9,55 @@
 //   node course/tooling/pr-report.mjs --json                 machine-readable output, e.g. for an AI evaluator
 //   node course/tooling/pr-report.mjs --repo owner/name      another repository than the current one
 //
-// Exit codes: 0 report written, 2 usage error, 3 environment problem (gh missing or not logged in).
-import { execFileSync } from "node:child_process";
+//   node course/tooling/pr-report.mjs --fix                  dry run: shows how each failing PR would be fixed
+//   node course/tooling/pr-report.mjs --fix --apply          fixes the PRs on GitHub and comments what is left
+//
+// --fix only does what can be done mechanically (see lib/pr-fix.mjs): the team label, the title, template
+// headings, "Closes #N", "## Team", missing checklist items (unticked) and the base branch of open PRs.
+// Everything else is listed in one comment per PR, which is updated, not repeated, on the next run.
+//
+// Exit codes: 0 done, 1 some fixes failed, 2 usage error, 3 environment problem (gh missing or not
+// logged in).
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { EXIT, parseArgs } from "../../server/tooling/workflow/lib/args.mjs";
 import { loadTypes } from "../../server/tooling/workflow/lib/types.mjs";
+import { runFixes } from "./lib/fix-runner.mjs";
+import { currentRepo, paginate } from "./lib/github.mjs";
+import { COMMENT_MARKER, planFix } from "./lib/pr-fix.mjs";
 import { auditPr, formatReport, groupByTeam, linkedIssue } from "./lib/pr-report.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const { flags } = parseArgs(process.argv.slice(2), { boolean: ["json", "failing"] });
+const { flags } = parseArgs(process.argv.slice(2), { boolean: ["json", "failing", "fix", "apply"] });
 const str = (name) => (typeof flags[name] === "string" ? flags[name] : null);
 
 const STATES = { open: ["OPEN"], merged: ["MERGED"], closed: ["CLOSED"], all: ["OPEN", "MERGED", "CLOSED"] };
 const state = str("state") ?? "all";
 const config = loadTypes(root);
 const team = str("team");
-if (!STATES[state] || (team && !config.teamLabels.includes(team))) {
+if (!STATES[state] || (team && !config.teamLabels.includes(team)) || (flags.apply && !flags.fix)) {
   console.error(
-    `usage: node course/tooling/pr-report.mjs [--state ${Object.keys(STATES).join("|")}] [--team ${config.teamLabels.join("|")}] [--failing] [--json] [--repo owner/name]`,
+    `usage: node course/tooling/pr-report.mjs [--state ${Object.keys(STATES).join("|")}] [--team ${config.teamLabels.join("|")}] [--failing] [--json] [--repo owner/name] [--fix [--apply]]`,
   );
   process.exit(EXIT.usage);
 }
 
-/** Runs a GraphQL query with the GitHub CLI. */
-function graphql(query, variables) {
-  const args = ["api", "graphql", "-f", `query=${query}`];
-  for (const [k, v] of Object.entries(variables)) if (v !== null) args.push("-F", `${k}=${v}`);
-  try {
-    return JSON.parse(execFileSync("gh", args, { cwd: root, encoding: "utf8", maxBuffer: 1 << 28 })).data;
-  } catch (err) {
-    console.error(
-      `error: could not read from GitHub with the GitHub CLI (installed and logged in with "gh auth login"?): ${err.stderr?.toString().trim() || err.message}`,
-    );
-    process.exit(EXIT.environment);
-  }
-}
-
-/** Reads every page of a connection. */
-function paginate(query, variables, pick) {
-  const nodes = [];
-  let cursor = null;
-  do {
-    const conn = pick(graphql(query, { ...variables, cursor }));
-    nodes.push(...conn.nodes);
-    cursor = conn.pageInfo.hasNextPage ? conn.pageInfo.endCursor : null;
-  } while (cursor);
-  return nodes;
-}
-
-let repo = str("repo");
-if (!repo) {
-  try {
-    repo = execFileSync("gh", ["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"], {
-      cwd: root,
-      encoding: "utf8",
-    }).trim();
-  } catch (err) {
-    console.error(`error: could not find the repository (pass --repo owner/name): ${err.message}`);
-    process.exit(EXIT.environment);
-  }
-}
+const repo = str("repo") ?? currentRepo(root);
 const [owner, name] = repo.split("/");
 
 const COMMITS = 100;
 const prs = paginate(
+  root,
   `query($owner: String!, $name: String!, $cursor: String) {
     repository(owner: $owner, name: $name) {
       pullRequests(first: 50, after: $cursor, states: [${STATES[state].join(", ")}], orderBy: { field: CREATED_AT, direction: DESC }) {
         pageInfo { hasNextPage endCursor }
         nodes {
-          number title body url state headRefName baseRefName
+          number title body url state headRefName baseRefName createdAt
           author { login }
           labels(first: 20) { nodes { name } }
           commits(first: ${COMMITS}) { totalCount nodes { commit { oid message } } }
+          comments(last: 50) { nodes { databaseId body viewerDidAuthor } }
         }
       }
     }
@@ -93,6 +68,7 @@ const prs = paginate(
 
 const issues = new Map(
   paginate(
+    root,
     `query($owner: String!, $name: String!, $cursor: String) {
       repository(owner: $owner, name: $name) {
         issues(first: 100, after: $cursor) {
@@ -112,7 +88,7 @@ const templates = Object.fromEntries(
     .map(([type, t]) => [type, readFileSync(`${root}/${t.prTemplate}`, "utf8")]),
 );
 
-let results = prs.map((p) => {
+const entries = prs.map((p) => {
   const pr = {
     number: p.number,
     title: p.title,
@@ -122,22 +98,40 @@ let results = prs.map((p) => {
     author: p.author?.login ?? "ghost",
     head: p.headRefName,
     base: p.baseRefName,
+    createdAt: p.createdAt,
     labels: p.labels.nodes.map((l) => l.name),
   };
+  const commits = p.commits.nodes.map((c) => ({ oid: c.commit.oid, message: c.commit.message }));
   const number = linkedIssue(pr.body, { allowRefs: pr.head === "main" });
-  return auditPr({
+  const result = auditPr({
     pr,
-    commits: p.commits.nodes.map((c) => ({ oid: c.commit.oid, message: c.commit.message })),
+    commits,
     commitsTruncated: p.commits.totalCount > COMMITS,
     issue: number === null ? null : (issues.get(number) ?? null),
     config,
     templates,
   });
+  const ownComment = p.comments.nodes.find((c) => c.viewerDidAuthor && c.body.includes(COMMENT_MARKER));
+  return { pr, commits, result, ownComment };
 });
-if (team) results = results.filter((r) => r.team === team);
+const selected = team ? entries.filter((e) => e.result.team === team) : entries;
+
+if (flags.fix === true) {
+  const items = selected
+    .filter((e) => !e.result.ok || e.ownComment)
+    .map((e) => ({
+      plan: planFix({ pr: e.pr, commits: e.commits, issues, config, templates }),
+      ownComment: e.ownComment,
+    }));
+  const { failed } = runFixes({ root, repo, kind: "pr", apply: flags.apply === true, items });
+  process.exit(failed > 0 ? EXIT.failed : EXIT.ok);
+}
 
 const failingOnly = flags.failing === true;
-const groups = groupByTeam(results, config.teamLabels)
+const groups = groupByTeam(
+  selected.map((e) => e.result),
+  config.teamLabels,
+)
   .map((g) => (failingOnly ? { ...g, passing: [] } : g))
   .filter((g) => !failingOnly || g.failCount > 0);
 

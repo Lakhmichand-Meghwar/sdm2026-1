@@ -27,7 +27,7 @@ pnpm check:setup
 pnpm dev
 ```
 
-- `pnpm install` stops with a clear message if your Node version is wrong.
+- `pnpm install` stops with a clear message if your Node version is wrong. It also switches on the repo's git hooks: your commits get their `Refs #<issue>` added from the branch name and are checked, and pushes run the quick checks.
 - Run `git config commit.template .gitmessage` once. Your commit editor then starts with the required message format (`type(scope): subject` plus `Refs #<issue>`), which `pnpm check:commit` and CI check.
 - `pnpm check:setup` checks your machine (Node and pnpm versions, dependencies, line endings, file names, free ports) and tells you how to fix anything that fails.
 - `pnpm dev` runs the template game: open <http://localhost:5173>. You should see **Server OK**. Stop it with Ctrl+C.
@@ -95,7 +95,7 @@ team-N/<issue>-<description>  →  feature/team-N  →  main  →  prod
    git switch -c team-N/42-short-description
    ```
 
-3. **Commit** small, focused changes in the imperative mood ("Add score display"), with `Refs #42` in the commit body.
+3. **Commit** small, focused changes in the imperative mood ("Add score display"), with `Refs #42` in the commit body. On a branch named `team-N/42-…` the commit hook adds `Refs #42` for you.
 4. **Check before you push:**
 
    ```bash
@@ -123,6 +123,7 @@ The course is AI first, so expect agents to do much of the work. Point them at t
 | Problem | Fix |
 |---|---|
 | `pnpm install` says "Wrong Node.js version" | Install the Node version it names (see step 1), open a new terminal, and run it again. |
+| A commit or push is refused with "does not follow the commit format" or a failing check | The hook says what's wrong and how to fix it. Fix it and try again; in an emergency, `git commit --no-verify` or `git push --no-verify` skips the hook once (CI still checks). |
 | CI fails at "Install" with a lockfile error | Your `package.json` changed without the lockfile. Run `pnpm install` and commit `pnpm-lock.yaml`. |
 | `pnpm dev` says a port is in use | Another dev server is still running. Stop it (Ctrl+C in its terminal), or run `pnpm check:setup` to see which port is taken. |
 | Every file shows as changed on Windows | Line endings were converted to CRLF. Run `pnpm format`, and check that you pulled `.gitattributes`. |

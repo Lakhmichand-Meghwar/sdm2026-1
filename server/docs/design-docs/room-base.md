@@ -80,7 +80,7 @@ interface GameDefinition<S, I, C extends RoomSettings> {
   joinOptionsSchema: z.ZodType<Record<string, unknown>>;  // name, color, ...
   config: C;
   init(ctx: SimContext<S, C>): void;
-  join(ctx: SimContext<S, C>, playerId: string, options: Record<string, unknown>): void;
+  join(ctx: SimContext<S, C>, playerId: string, options: Record<string, unknown>, info: { guest: string }): void;
   leave(ctx: SimContext<S, C>, playerId: string): void;
   step(ctx: SimContext<S, C>, inputs: TickInput<I>[]): void;  // inputs in arrival order
   commands?: Record<string, DebugCommandHandler<S, C>>;        // game-specific debug commands
@@ -98,7 +98,7 @@ BaseState {
   paused: boolean
   seats: map<Seat>        // keyed by sessionId, written only by the base
 }
-Seat { connected: boolean; lastSeq: uint32 }
+Seat { connected: boolean; lastSeq: uint32; guest: string }   // guest: see Guest identity
 ```
 
 - Games keep their own entities wherever they like: a player map, one shared vehicle, or anything else. The base doesn't assume there is one entity per player.
@@ -147,6 +147,25 @@ Rules for the definition, enforced by review and documented in `server/CLAUDE.md
 - `?room=CODE` is the invite link. The client core already parses it (`readClientParams`, `normalizeRoomCode` and `buildInviteLink` in `@sdm/core/client`). The client accepts any four letters A–Z, and our alphabet is a subset of that, so the two stay compatible. Codes the client accepts but the server never issues simply come back as "unknown room".
 - Quick match (`joinOrCreate(roomName)`) keeps working for public rooms.
 - How the code lookup works is the builder's choice. It could be Colyseus `filterBy(["code"])`, or a small `POST /api/rooms/join` that returns a room id for `joinById`. Note that Colyseus "private" rooms are excluded from matchmaking, so with the `filterBy` route, use unlisted rooms instead.
+
+## Guest identity
+
+*(Added with #223.)* A sessionId lasts one seat, so on its own a game can't tell that the person in a new tab, or back after their seat expired, is someone it has seen before. There are no accounts, so the browser proves it instead:
+
+- The client keeps a random UUID in `localStorage` (`getGuestId()` in `@sdm/core/client`, key `sdm:guestId`), shared by every tab and kept across reloads, and sends it as the join option `guestId`. It is one key for the whole browser, deliberately not scoped to the game's path, so every game behind the gateway reads the same ID. Without usable storage it falls back to one in-memory ID per page.
+- The room computes the **fingerprint** `guest`: the first 12 hex characters of SHA-256 of `<game id>:<lowercased ID>`, where the game id is the definition's `id` (`guestFingerprint(def.id, guestId)` in `@sdm/core/server`, using `node:crypto`, so nothing browser-side needs it). Anything that isn't a UUID gives `""`, and never rejects the join.
+- The base removes `guestId` from the options before the game's `joinOptionsSchema` sees them, so no game declares it and a strict schema can't reject it.
+- `Seat.guest` holds the fingerprint (synced, so clients see which seats belong to one person). The game's `join(ctx, playerId, options, info)` gets it as `info.guest`. The replay's join event records it, so `runReplay` passes the same value; a replay without it reads as `""`. The `player joined` log line carries it.
+
+**What the guest is for:** a hint to recognise a returning player in this game, not authentication. Never use it to hand over a seat, a score or ownership: every game on the shared origin can read `sdm:guestId`, and a client can send any UUID (a fresh one to avoid being recognised).
+
+**Why the fingerprint is per game:** all games share one origin behind the gateway (`/team-N`), so one browser sends the same raw ID to every game. Hashing the game id in gives each game a different `guest` for that browser, so public state can't be used to link a player across games. The definition's `id` is used because it is per game, fixed in code, available to the room base and the replay runner, and already recorded in every replay (`replay.game`); the room name is per room type, not per game, and the server's `gameId` isn't known to the room base.
+
+**Why only the fingerprint is stored:** state, replays, logs and the stats and replay routes can all be downloaded or read by other players and by whoever debugs a playtest. Keeping the raw ID out of them means a copied value can't be replayed into another game's room, or used to look the player up there. A 48-bit prefix of a hash can't be turned back into the ID, but is still unique enough to tell a room's guests apart. The replay schema only accepts 12 hex characters or `""` as `guest`, so a raw ID can't be recorded by mistake.
+
+Not included: accounts, persistence across server restarts (the ID lives in the browser; the server keeps nothing), and stopping one guest from taking two seats. A game that cares can compare `guest` values itself.
+
+**Compatibility:** adding `Seat.guest` changes `state.toJSON()`, so a replay recorded before this change still runs but no longer reproduces its recorded `final.stateHash`. Replays are in-memory and wiped on deploy, so only replays downloaded earlier and attached to issues are affected. Making the fingerprint per game doesn't touch replays: the join event carries the fingerprint the live room computed, and `runReplay` uses it as recorded instead of hashing again.
 
 ## Reconnection
 

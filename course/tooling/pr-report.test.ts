@@ -169,3 +169,19 @@ describe("groupByTeam and formatReport", () => {
     expect(md).not.toContain("Passing:");
   });
 });
+
+describe("title rule by date", () => {
+  const legacy = { ...pr, title: "[team-2] Add login", state: "MERGED" };
+  const titleProblems = (over: Record<string, unknown>) =>
+    audit({ pr: { ...legacy, ...over } }).problems.filter((p: { rule: string }) => p.rule === "title");
+
+  it("accepts the old [team-N] title on PRs opened before the rule changed", () => {
+    expect(titleProblems({ createdAt: "2026-11-06T10:00:00Z" })).toEqual([]);
+    expect(titleProblems({ state: "OPEN", createdAt: "2026-11-06T10:00:00Z" })).toEqual([]);
+  });
+
+  it("requires the Conventional title on PRs opened after it", () => {
+    expect(titleProblems({ createdAt: "2026-11-06T15:00:00Z" })).not.toEqual([]);
+    expect(titleProblems({ createdAt: null })).not.toEqual([]);
+  });
+});

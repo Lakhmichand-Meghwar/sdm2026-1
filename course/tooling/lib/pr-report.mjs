@@ -40,9 +40,19 @@ export function teamOf(pr, teamLabels) {
 }
 
 /**
+ * PR titles follow Conventional Commits ("feat(team-2): add login page") since #86 merged. PRs opened
+ * before then got their title under the rule of their time, "[team-2] Add login page", and are judged by it.
+ */
+export const TITLE_RULE_CHANGED_AT = "2026-11-06T14:29:27Z";
+
+/** @param {{ createdAt?: string | null }} pr */
+export const allowsLegacyTitle = (pr) =>
+  Boolean(pr.createdAt) && Date.parse(pr.createdAt) < Date.parse(TITLE_RULE_CHANGED_AT);
+
+/**
  * Audits one pull request.
  * @param {{
- *   pr: { number: number, title: string, body: string | null, head: string, base: string, labels: string[], state: string, author: string, url?: string },
+ *   pr: { number: number, title: string, body: string | null, head: string, base: string, labels: string[], state: string, author: string, url?: string, createdAt?: string | null },
  *   commits: { oid?: string, message: string }[],
  *   commitsTruncated?: boolean,
  *   issue: { number: number, labels: string[] } | null,
@@ -59,6 +69,7 @@ export function auditPr({ pr, commits, commitsTruncated = false, issue, config, 
     labels: pr.labels,
     config,
     templates,
+    allowLegacyTitle: allowsLegacyTitle(pr),
   });
   /** @type {{ rule: string, message: string }[]} */
   const problems = [...template.problems];
