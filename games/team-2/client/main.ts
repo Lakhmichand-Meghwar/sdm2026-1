@@ -1,4 +1,5 @@
 ﻿import { Client, type Room } from "@colyseus/sdk";
+import { serverUrlFromPage } from "@sdm/core/client";
 import {
   type EscapeAction,
   type EscapeSnapshot,
@@ -18,7 +19,9 @@ import "./style.css";
 
 const endpoint =
   import.meta.env.VITE_SERVER_URL ??
-  (import.meta.env.DEV ? `${location.protocol}//${location.hostname}:2567` : location.origin);
+  (import.meta.env.DEV
+    ? `${location.protocol}//${location.hostname}:2567`
+    : serverUrlFromPage(location.href));
 const client = new Client(endpoint);
 
 function element<T extends HTMLElement>(id: string): T {
