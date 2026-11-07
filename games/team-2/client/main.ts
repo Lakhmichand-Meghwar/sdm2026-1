@@ -9,6 +9,7 @@ import {
   tickMs,
 } from "../shared/escape.ts";
 import { cabinetOpened, playCabinet } from "./cabinet.ts";
+import { canvasSlashed, playCanvasSlash } from "./canvas.ts";
 import { playDrawer } from "./drawer.ts";
 import { playFootsteps, unlockAudio, walkers } from "./footsteps.ts";
 import { knifeTaken, playKnife } from "./knife.ts";
@@ -210,6 +211,7 @@ function render(state: EscapeSnapshot) {
   for (const id of walkers(snapshot?.patients, state.patients)) playFootsteps(id === room?.sessionId);
   if (cabinetOpened(snapshot, state)) playCabinet();
   if (knifeTaken(snapshot, state)) playKnife();
+  if (canvasSlashed(snapshot, state)) playCanvasSlash();
   snapshot = state;
   const encounter = state.ghostSeconds !== null;
   const active = state.phase === "running";
